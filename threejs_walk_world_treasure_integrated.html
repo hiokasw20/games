@@ -1,0 +1,1035 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Three.js 3Dフィールド探索</title>
+<style>
+  :root { color-scheme: dark; --panel:#16201d; --panel2:#202d28; --accent:#a9dc76; --text:#f2f5ed; --muted:#b6c2b7; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#101713; color:var(--text); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+  #app { display:flex; flex-direction:column; height:100dvh; min-height:0; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 15px; background:#17211c; border-bottom:1px solid #324239; z-index:2; }
+  h1 { font-size:clamp(15px,2.5vw,20px); margin:0; font-weight:750; letter-spacing:.03em; }
+  .sub { font-size:12px; color:var(--muted); margin-top:2px; }
+  .head-right { display:flex; align-items:center; gap:10px; }
+  #status { font-size:12px; color:#d3e7c9; text-align:right; }
+  button { font:inherit; cursor:pointer; color:var(--text); border:1px solid #536657; background:#293b30; border-radius:9px; padding:7px 11px; }
+  button:hover { background:#354b3b; }
+  #scene-wrap { position:relative; flex:1; min-height:0; overflow:hidden; background:#9ebc8c; }
+  #scene-wrap canvas { display:block; width:100%; height:100%; outline:none; touch-action:none; }
+  .hud { position:absolute; z-index:1; top:12px; left:12px; max-width:min(440px,calc(100% - 24px)); background:rgba(16,25,20,.78); border:1px solid rgba(220,245,215,.23); border-radius:10px; padding:9px 12px; backdrop-filter:blur(4px); pointer-events:none; }
+  .hud strong { color:#d8f5b8; font-size:13px; }
+  .hud div { color:#e0e9de; font-size:12px; line-height:1.6; }
+  #position { color:#c5d2c5; }
+  .bottom { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:8px 14px; background:#17211c; border-top:1px solid #324239; font-size:12px; color:var(--muted); }
+  .bottom strong { color:#e4f1de; }
+  .touch-controls { display:none; position:absolute; z-index:2; left:14px; bottom:14px; width:140px; height:140px; touch-action:none; }
+  .touch-btn { position:absolute; display:grid; place-items:center; width:44px; height:44px; padding:0; border-radius:12px; background:rgba(27,42,32,.82); border:1px solid rgba(240,255,238,.38); color:white; font-size:20px; font-weight:700; box-shadow:0 2px 7px #0004; user-select:none; }
+  .touch-btn:active,.touch-btn.pressed { background:rgba(112,159,78,.9); }
+  [data-move="forward"] { left:48px; top:0; }
+  [data-move="back"] { left:48px; bottom:0; }
+  [data-move="left"] { left:0; top:48px; }
+  [data-move="right"] { right:0; top:48px; }
+  .touch-hint { position:absolute; z-index:2; right:12px; bottom:18px; padding:7px 9px; border-radius:8px; font-size:11px; color:#fff; background:rgba(16,25,20,.65); }
+  #error { display:none; position:absolute; inset:0; z-index:5; padding:30px; background:#17211c; color:white; align-content:center; text-align:center; line-height:1.7; }
+  @media (pointer:coarse), (max-width:720px) {
+    .touch-controls { display:block; }
+    .touch-hint { display:block; }
+    .sub { display:none; }
+    header { padding:8px 11px; }
+    #status { max-width:120px; font-size:10px; }
+    .bottom { padding:6px 10px; font-size:10px; }
+    .desktop-tip { display:none; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <h1>3Dフィールド探索</h1>
+      <div class="sub">Three.js ベースゲーム基盤 — 地形・オブジェクト・当たり判定</div>
+    </div>
+    <div class="head-right">
+      <div id="status">フィールドを準備中…</div>
+      <button id="reset-player" type="button">位置リセット</button>
+    </div>
+  </header>
+  <main id="scene-wrap" aria-label="3Dゲーム画面">
+    <div class="hud">
+      <strong>探索フィールド</strong>
+      <div>歩いて移動できます。池・家・木・岩・丘は通り抜けできません。</div>
+      <div>宝箱に触れると賞品発表画面に切り替わります。</div>
+      <div id="position">位置 X: 0.0 / Z: 0.0</div>
+    </div>
+    <div class="touch-controls" aria-label="タッチ操作">
+      <button class="touch-btn" data-move="forward" aria-label="前進">▲</button>
+      <button class="touch-btn" data-move="back" aria-label="後退">▼</button>
+      <button class="touch-btn" data-move="left" aria-label="左へ移動">◀</button>
+      <button class="touch-btn" data-move="right" aria-label="右へ移動">▶</button>
+    </div>
+    <div class="touch-hint">画面をドラッグ：視点回転</div>
+    <div id="error">3D画面を初期化できませんでした。<br>インターネット接続と、WebGLに対応したブラウザを確認してください。</div>
+  </main>
+  <footer class="bottom">
+    <span><strong>PC:</strong> WASD / 矢印キーで移動　<span class="desktop-tip">マウスドラッグで視点回転</span></span>
+    <span><strong>Mobile:</strong> 左下の方向キー</span>
+    <span>Gamepad API 対応</span>
+  </footer>
+</div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js';
+
+const wrap = document.getElementById('scene-wrap');
+const statusEl = document.getElementById('status');
+const positionEl = document.getElementById('position');
+const errorEl = document.getElementById('error');
+
+// 宝箱取得画面を同じHTML内で表示する（別HTMLへの遷移に依存しない）
+function showTreasurePrize() {
+  const screen = document.getElementById('prize-screen');
+  screen.classList.add('active');
+  document.getElementById('scene-wrap').style.visibility = 'hidden';
+  document.querySelector('header').style.visibility = 'hidden';
+  document.querySelector('.bottom').style.visibility = 'hidden';
+  document.getElementById('status').textContent = '宝箱を発見！';
+  startPrizeScene();
+}
+
+
+try {
+  // ------------------------------------------------------------------
+  // 1. Scene / renderer
+  // ------------------------------------------------------------------
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x9bc4d1);
+  scene.fog = new THREE.Fog(0x9bc4d1, 70, 155);
+
+  const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 240);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.8));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.12;
+  renderer.domElement.tabIndex = 0;
+  renderer.domElement.setAttribute('aria-label', '3Dフィールド。WASDまたは矢印キーで移動');
+  wrap.prepend(renderer.domElement);
+
+  const hemi = new THREE.HemisphereLight(0xdff3ff, 0x54633a, 1.7);
+  scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xfff0d2, 2.3);
+  sun.position.set(-32, 48, 22);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.camera.left = -75;
+  sun.shadow.camera.right = 75;
+  sun.shadow.camera.top = 75;
+  sun.shadow.camera.bottom = -75;
+  sun.shadow.normalBias = 0.035;
+  scene.add(sun);
+
+  // A procedural grass texture avoids any external image dependency.
+  function makeGrassTexture() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    g.fillStyle = '#71964c'; g.fillRect(0, 0, 128, 128);
+    for (let i = 0; i < 1300; i++) {
+      const x = Math.random() * 128, y = Math.random() * 128;
+      const light = Math.random() > 0.52;
+      g.fillStyle = light ? 'rgba(193,218,120,0.22)' : 'rgba(35,76,34,0.19)';
+      g.fillRect(x, y, 1 + Math.random() * 2, 1 + Math.random() * 4);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(36, 36);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+  const grassMat = new THREE.MeshStandardMaterial({ map: makeGrassTexture(), roughness: 1 });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), grassMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // Far-edge low hills. Keep a matching collision ellipse for each visible hill.
+  // The ellipses approximate the part of each scaled sphere that rises above ground.
+  const hillMat = new THREE.MeshStandardMaterial({ color: 0x789b66, roughness: 1 });
+  const hillColliders = [];
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * Math.PI * 2;
+    const r = 79 + Math.random() * 5;
+    const hill = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), hillMat);
+    const s = 9 + Math.random() * 9;
+    hill.scale.set(s * 1.5, s * 0.6, s);
+    hill.position.set(Math.cos(a) * r, -1.5, Math.sin(a) * r);
+    hill.castShadow = true; hill.receiveShadow = true; scene.add(hill);
+    hillColliders.push({
+      type: 'ellipse', x: hill.position.x, z: hill.position.z,
+      rx: s * 1.44, rz: s * 0.96, label: '丘'
+    });
+  }
+  // Small dirt paths for visual guidance; these are decoration, not collision surfaces.
+  const pathMat = new THREE.MeshStandardMaterial({ color: 0xb7a078, roughness: 1 });
+  function addPath(x, z, w, d, rotation = 0) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), pathMat);
+    m.rotation.x = -Math.PI / 2; m.rotation.z = rotation; m.position.set(x, 0.025, z);
+    m.receiveShadow = true; scene.add(m);
+  }
+  addPath(5, 5, 3.2, 28);
+  addPath(10, -8, 22, 3.2, 0.05);
+
+  // ------------------------------------------------------------------
+  // 2. Colliders: circles, axis-aligned boxes, and an elliptical pond
+  // ------------------------------------------------------------------
+  const colliders = [];
+  const pondCollider = { type: 'ellipse', x: -19, z: -13, rx: 8.0, rz: 5.8 };
+  colliders.push(pondCollider);
+  // Add the colliders generated alongside the hills near the map boundary.
+  colliders.push(...hillColliders);
+  const playerRadius = 0.42;
+  const worldLimit = 75;
+
+  function addCircleCollider(x, z, radius, label) {
+    colliders.push({ type: 'circle', x, z, radius, label });
+  }
+  function addBoxCollider(x, z, halfW, halfD, label) {
+    colliders.push({ type: 'box', x, z, halfW, halfD, label });
+  }
+
+  // ------------------------------------------------------------------
+  // 3. Pond / shore
+  // ------------------------------------------------------------------
+  const shore = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 56),
+    new THREE.MeshStandardMaterial({ color: 0xc6b88b, roughness: 1 })
+  );
+  shore.rotation.x = -Math.PI / 2;
+  shore.position.set(pondCollider.x, 0.035, pondCollider.z);
+  shore.scale.set(pondCollider.rx + 0.9, pondCollider.rz + 0.8, 1);
+  shore.receiveShadow = true; scene.add(shore);
+
+  const water = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 64),
+    new THREE.MeshStandardMaterial({ color: 0x3a9db6, roughness: 0.24, metalness: 0.08, transparent: true, opacity: 0.92 })
+  );
+  water.rotation.x = -Math.PI / 2;
+  water.position.set(pondCollider.x, 0.08, pondCollider.z);
+  water.scale.set(pondCollider.rx, pondCollider.rz, 1);
+  scene.add(water);
+
+  const reedMat = new THREE.MeshStandardMaterial({ color: 0x557e36, roughness: 1 });
+  for (let i = 0; i < 22; i++) {
+    const a = (i / 22) * Math.PI * 2;
+    const x = pondCollider.x + Math.cos(a) * (pondCollider.rx + 0.55);
+    const z = pondCollider.z + Math.sin(a) * (pondCollider.rz + 0.45);
+    const reed = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.7 + Math.random() * 0.45, 5), reedMat);
+    reed.position.set(x, 0.34, z); reed.rotation.z = (Math.random() - 0.5) * 0.35;
+    reed.castShadow = true; scene.add(reed);
+  }
+
+  // ------------------------------------------------------------------
+  // 4. Buildings
+  // ------------------------------------------------------------------
+  const houses = [
+    { x: 14, z: 13, body: 0xd7bc8b, roof: 0x9b4f3e, scale: 1 },
+    { x: 31, z: -17, body: 0xc7d0b7, roof: 0x596e76, scale: 0.82 },
+    { x: -37, z: 22, body: 0xd4c6a7, roof: 0x805c3e, scale: 0.92 }
+  ];
+  const doorMat = new THREE.MeshStandardMaterial({ color: 0x65432c, roughness: 0.9 });
+  const windowMat = new THREE.MeshStandardMaterial({ color: 0x8ed4df, roughness: 0.3, metalness: 0.05 });
+  houses.forEach((h, i) => {
+    const group = new THREE.Group();
+    group.position.set(h.x, 0, h.z); group.scale.setScalar(h.scale);
+    const wallMat = new THREE.MeshStandardMaterial({ color: h.body, roughness: 0.92 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: h.roof, roughness: 0.95 });
+    const base = new THREE.Mesh(new THREE.BoxGeometry(6.5, 4.2, 5.6), wallMat);
+    base.position.y = 2.1; base.castShadow = true; base.receiveShadow = true; group.add(base);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(4.9, 2.9, 4), roofMat);
+    roof.rotation.y = Math.PI / 4; roof.position.y = 5.45; roof.scale.set(1, 1, 0.83);
+    roof.castShadow = true; roof.receiveShadow = true; group.add(roof);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.05, 2.25, 0.13), doorMat);
+    door.position.set(0, 1.12, 2.86); group.add(door);
+    for (const wx of [-2, 2]) {
+      const win = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.85, 0.12), windowMat);
+      win.position.set(wx, 2.45, 2.86); group.add(win);
+    }
+    scene.add(group);
+    addBoxCollider(h.x, h.z, 3.85 * h.scale, 3.35 * h.scale, `家${i + 1}`);
+  });
+
+  // ------------------------------------------------------------------
+  // 5. Trees, rocks, shrubs. All solid objects register a collider.
+  // ------------------------------------------------------------------
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x785033, roughness: 1 });
+  const leafMats = [0x376d37, 0x477e3d, 0x2e6037, 0x5c8c45].map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 1 }));
+  function addTree(x, z, s = 1, variant = 0) {
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, 2.15, 7), trunkMat);
+    trunk.position.y = 1.08; trunk.castShadow = true; trunk.receiveShadow = true; g.add(trunk);
+    if (variant % 2 === 0) {
+      const lower = new THREE.Mesh(new THREE.ConeGeometry(1.45, 2.7, 8), leafMats[variant % leafMats.length]);
+      lower.position.y = 2.6; lower.castShadow = true; lower.receiveShadow = true; g.add(lower);
+      const upper = new THREE.Mesh(new THREE.ConeGeometry(1.05, 2.3, 8), leafMats[(variant + 1) % leafMats.length]);
+      upper.position.y = 4.15; upper.castShadow = true; g.add(upper);
+    } else {
+      for (const [y, r] of [[2.7, 1.15], [3.55, 0.95], [4.25, 0.68]]) {
+        const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), leafMats[variant % leafMats.length]);
+        crown.position.set((Math.random() - 0.5) * 0.25, y, (Math.random() - 0.5) * 0.25);
+        crown.castShadow = true; crown.receiveShadow = true; g.add(crown);
+      }
+    }
+    scene.add(g);
+    addCircleCollider(x, z, 0.72 * s, '木');
+  }
+
+  const rockMats = [0x85877c, 0x777c76, 0x99978b].map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 1 }));
+  function addRock(x, z, s = 1, variant = 0) {
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.9, 0), rockMats[variant % rockMats.length]);
+    rock.position.set(x, 0.55 * s, z); rock.scale.set(1.2 * s, 0.75 * s, 0.95 * s);
+    rock.rotation.set(Math.random() * 0.35, Math.random() * Math.PI, Math.random() * 0.3);
+    rock.castShadow = true; rock.receiveShadow = true; scene.add(rock);
+    addCircleCollider(x, z, 0.85 * s, '岩');
+  }
+
+  // Fixed landmarks give the player recognizable things to explore.
+  [
+    [-7, -2, 1.05, 0], [-8, 12, 1.1, 1], [25, 4, 1.1, 2], [37, 13, 0.9, 3],
+    [20, -29, 1.2, 1], [4, -30, 0.95, 0], [-31, -20, 1.05, 2], [-48, 8, 1.1, 1],
+    [-24, 31, 0.9, 3], [48, -4, 1.05, 0], [45, 29, 1.15, 2], [-7, 40, 1, 1]
+  ].forEach(([x,z,s,v]) => addTree(x, z, s, v));
+  [[-12, -23, 1.2], [-1, 6, 0.8], [23, 25, 1], [38, -29, 1.25], [-44, -16, 1.1], [-25, 8, 0.85], [5, 31, 1.1], [51, 17, 0.9], [-47, 35, 1.2], [8, -43, 1.1]].forEach(([x,z,s],i)=>addRock(x,z,s,i));
+
+  // Random tree scatter, with clearance around the spawn, pond, and houses.
+  function tooCloseToLandmark(x, z) {
+    if (Math.hypot(x, z) < 7.5) return true;
+    if (((x - pondCollider.x) / 12) ** 2 + ((z - pondCollider.z) / 9) ** 2 < 1) return true;
+    for (const h of houses) if (Math.abs(x - h.x) < 7.5 && Math.abs(z - h.z) < 7.5) return true;
+    return false;
+  }
+  let placed = 0, attempts = 0;
+  while (placed < 42 && attempts < 1200) {
+    attempts++;
+    const x = (Math.random() - 0.5) * 136;
+    const z = (Math.random() - 0.5) * 136;
+    if (tooCloseToLandmark(x, z)) continue;
+    const nearby = colliders.some(c => c.type === 'circle' && Math.hypot(x-c.x,z-c.z) < c.radius + 3.2);
+    if (nearby) continue;
+    addTree(x, z, 0.72 + Math.random() * 0.45, Math.floor(Math.random() * 4));
+    placed++;
+  }
+  // Non-solid wildflowers add scale and texture.
+  const flowerColors = [0xf3d778, 0xf1e8dc, 0xd8a6cc];
+  for (let i = 0; i < 180; i++) {
+    const x = (Math.random() - 0.5) * 138, z = (Math.random() - 0.5) * 138;
+    if (Math.hypot(x,z) < 3 || (((x-pondCollider.x)/10)**2 + ((z-pondCollider.z)/7)**2 < 1)) continue;
+    const flower = new THREE.Mesh(new THREE.SphereGeometry(0.075, 5, 4), new THREE.MeshStandardMaterial({ color: flowerColors[i % flowerColors.length], roughness: 1 }));
+    flower.position.set(x, 0.11, z); flower.castShadow = false; scene.add(flower);
+  }
+
+  // ------------------------------------------------------------------
+  // 6. Random treasure chest. Spawn it in a clear area of the field.
+  // ------------------------------------------------------------------
+  const treasureCollisionRadius = 0.82;
+  let treasureOpened = false;
+  let treasurePosition = null;
+
+  function isTreasureSpotClear(x, z) {
+    // Keep the chest away from the player spawn and leave room around its body.
+    if (Math.hypot(x, z) < 10) return false;
+    const samples = [
+      [0, 0], [1.15, 0], [-1.15, 0], [0, 1.15], [0, -1.15],
+      [0.82, 0.82], [0.82, -0.82], [-0.82, 0.82], [-0.82, -0.82]
+    ];
+    return samples.every(([dx, dz]) => canStandAt(x + dx, z + dz));
+  }
+
+  for (let i = 0; i < 5000 && !treasurePosition; i++) {
+    const x = (Math.random() - 0.5) * 124;
+    const z = (Math.random() - 0.5) * 124;
+    if (isTreasureSpotClear(x, z)) treasurePosition = { x, z };
+  }
+  // Deterministic fallback in case a future map change makes random placement difficult.
+  if (!treasurePosition) {
+    for (let z = -60; z <= 60 && !treasurePosition; z += 3) {
+      for (let x = -60; x <= 60 && !treasurePosition; x += 3) {
+        if (isTreasureSpotClear(x, z)) treasurePosition = { x, z };
+      }
+    }
+  }
+
+  if (treasurePosition) {
+    const treasure = new THREE.Group();
+    const chestWoodMat = new THREE.MeshStandardMaterial({ color: 0x875027, roughness: 0.86 });
+    const chestLidMat = new THREE.MeshStandardMaterial({ color: 0xa9662e, roughness: 0.82 });
+    const chestGoldMat = new THREE.MeshStandardMaterial({ color: 0xe5bd4e, metalness: 0.45, roughness: 0.34 });
+    const chestDarkMat = new THREE.MeshStandardMaterial({ color: 0x4b2d18, roughness: 0.8 });
+
+    const chestBody = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.72, 0.9), chestWoodMat);
+    chestBody.position.y = 0.39;
+    chestBody.castShadow = true; chestBody.receiveShadow = true; treasure.add(chestBody);
+
+    const chestLid = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.24, 0.96), chestLidMat);
+    chestLid.position.y = 0.87;
+    chestLid.castShadow = true; chestLid.receiveShadow = true; treasure.add(chestLid);
+
+    // Brass bands and a front-facing lock make the item recognizable from a distance.
+    for (const x of [-0.43, 0.43]) {
+      const band = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.72, 0.035), chestGoldMat);
+      band.position.set(x, 0.42, -0.465); treasure.add(band);
+      const topBand = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.25, 0.99), chestGoldMat);
+      topBand.position.set(x, 0.88, 0); treasure.add(topBand);
+    }
+    const lockPlate = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.25, 0.045), chestGoldMat);
+    lockPlate.position.set(0, 0.61, -0.48); treasure.add(lockPlate);
+    const keyhole = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), chestDarkMat);
+    keyhole.position.set(0, 0.63, -0.51); treasure.add(keyhole);
+
+    // Small golden glints help players spot the randomly placed chest.
+    const glintMat = new THREE.MeshBasicMaterial({ color: 0xffdf72 });
+    for (const [x, y, z] of [[-0.8, 1.35, 0], [0.7, 1.45, -0.1], [0, 1.55, 0.35]]) {
+      const glint = new THREE.Mesh(new THREE.SphereGeometry(0.07, 7, 6), glintMat);
+      glint.position.set(x, y, z); treasure.add(glint);
+    }
+    treasure.position.set(treasurePosition.x, 0, treasurePosition.z);
+    treasure.rotation.y = Math.random() * Math.PI * 2;
+    treasure.traverse(obj => { if (obj.isMesh) obj.castShadow = true; });
+    scene.add(treasure);
+  }
+
+  function checkTreasureCollision() {
+    if (treasureOpened || !treasurePosition) return;
+    const dx = player.position.x - treasurePosition.x;
+    const dz = player.position.z - treasurePosition.z;
+    if (dx * dx + dz * dz <= (playerRadius + treasureCollisionRadius) ** 2) {
+      treasureOpened = true;
+      held.clear();
+      statusEl.textContent = '宝箱を発見！';
+      showTreasurePrize();
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // 7. Player model (procedural low-poly character)
+  // ------------------------------------------------------------------
+  const player = new THREE.Group();
+  player.position.set(0, 0, 0);
+  scene.add(player);
+  const visual = new THREE.Group(); player.add(visual);
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xe3b58b, roughness: 0.9 });
+  const shirtMat = new THREE.MeshStandardMaterial({ color: 0x3e82a0, roughness: 0.85 });
+  const pantsMat = new THREE.MeshStandardMaterial({ color: 0x303d55, roughness: 0.95 });
+  const bootMat = new THREE.MeshStandardMaterial({ color: 0x4d3d2e, roughness: 0.95 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x382e27, roughness: 1 });
+
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 0.68, 4, 8), shirtMat);
+  torso.position.y = 1.22; torso.castShadow = true; visual.add(torso);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.31, 12, 10), skinMat);
+  head.position.y = 2.02; head.castShadow = true; visual.add(head);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.57), darkMat);
+  hair.position.y = 2.12; hair.castShadow = true; visual.add(hair);
+  // Nose points toward the character's forward direction (-Z).
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.07, 7, 6), skinMat);
+  nose.position.set(0, 2.0, -0.3); visual.add(nose);
+
+  function makeLimb(radius, length, material, x, y) {
+    const pivot = new THREE.Group(); pivot.position.set(x, y, 0); visual.add(pivot);
+    const limb = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.82, radius, length, 7), material);
+    limb.position.y = -length / 2; limb.castShadow = true; pivot.add(limb);
+    return pivot;
+  }
+  const legL = makeLimb(0.16, 0.72, pantsMat, -0.21, 0.78);
+  const legR = makeLimb(0.16, 0.72, pantsMat, 0.21, 0.78);
+  const armL = makeLimb(0.12, 0.68, shirtMat, -0.48, 1.56);
+  const armR = makeLimb(0.12, 0.68, shirtMat, 0.48, 1.56);
+  const footL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.15, 0.42), bootMat);
+  footL.position.set(-0.21, 0.1, -0.1); footL.castShadow = true; visual.add(footL);
+  const footR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.15, 0.42), bootMat);
+  footR.position.set(0.21, 0.1, -0.1); footR.castShadow = true; visual.add(footR);
+  // Soft dark disc below the character gives a reliable visual ground reference.
+  const shadowDisc = new THREE.Mesh(new THREE.CircleGeometry(0.58, 20), new THREE.MeshBasicMaterial({ color: 0x1c2b18, transparent: true, opacity: 0.22, depthWrite: false }));
+  shadowDisc.rotation.x = -Math.PI / 2; shadowDisc.position.y = 0.02; player.add(shadowDisc);
+
+  // ------------------------------------------------------------------
+  // 8. Input + collision movement
+  // ------------------------------------------------------------------
+  const held = new Set();
+  const keyNames = {
+    KeyW: 'forward', ArrowUp: 'forward',
+    KeyS: 'back', ArrowDown: 'back',
+    KeyA: 'left', ArrowLeft: 'left',
+    KeyD: 'right', ArrowRight: 'right'
+  };
+  function keyDown(e) {
+    const name = keyNames[e.code];
+    if (!name) return;
+    e.preventDefault(); held.add(name);
+  }
+  function keyUp(e) {
+    const name = keyNames[e.code];
+    if (name) { e.preventDefault(); held.delete(name); }
+  }
+  window.addEventListener('keydown', keyDown);
+  window.addEventListener('keyup', keyUp);
+  window.addEventListener('blur', () => held.clear());
+  document.addEventListener('visibilitychange', () => { if (document.hidden) held.clear(); });
+
+  document.querySelectorAll('[data-move]').forEach(btn => {
+    const name = btn.dataset.move;
+    const press = e => { e.preventDefault(); held.add(name); btn.classList.add('pressed'); if (btn.setPointerCapture && e.pointerId !== undefined) { try { btn.setPointerCapture(e.pointerId); } catch(_) {} } };
+    const release = e => { e.preventDefault(); held.delete(name); btn.classList.remove('pressed'); };
+    btn.addEventListener('pointerdown', press);
+    btn.addEventListener('pointerup', release);
+    btn.addEventListener('pointercancel', release);
+    btn.addEventListener('lostpointercapture', release);
+    btn.addEventListener('contextmenu', e => e.preventDefault());
+  });
+
+  function canStandAt(x, z) {
+    if (x < -worldLimit || x > worldLimit || z < -worldLimit || z > worldLimit) return false;
+    for (const c of colliders) {
+      if (c.type === 'circle') {
+        const rr = c.radius + playerRadius;
+        if ((x-c.x)*(x-c.x) + (z-c.z)*(z-c.z) < rr*rr) return false;
+      } else if (c.type === 'box') {
+        const nearX = THREE.MathUtils.clamp(x, c.x-c.halfW, c.x+c.halfW);
+        const nearZ = THREE.MathUtils.clamp(z, c.z-c.halfD, c.z+c.halfD);
+        const dx = x-nearX, dz = z-nearZ;
+        if (dx*dx + dz*dz < playerRadius*playerRadius) return false;
+      } else if (c.type === 'ellipse') {
+        // Inflating both radii by the player radius approximates a safe shoreline margin.
+        const nx = (x-c.x)/(c.rx+playerRadius);
+        const nz = (z-c.z)/(c.rz+playerRadius);
+        if (nx*nx + nz*nz < 1) return false;
+      }
+    }
+    return true;
+  }
+  function tryMove(dx, dz) {
+    // Axis-separated collision allows the player to slide along a wall or a tree.
+    const nx = player.position.x + dx;
+    if (canStandAt(nx, player.position.z)) player.position.x = nx;
+    const nz = player.position.z + dz;
+    if (canStandAt(player.position.x, nz)) player.position.z = nz;
+  }
+
+  // ------------------------------------------------------------------
+  // 9. Follow camera; drag to orbit around the player
+  // ------------------------------------------------------------------
+  let cameraYaw = 0;
+  let cameraPitch = 0.28;
+  const cameraDistance = 8.2;
+  let dragging = false, lastPointerX = 0, lastPointerY = 0;
+  renderer.domElement.addEventListener('pointerdown', e => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    dragging = true; lastPointerX = e.clientX; lastPointerY = e.clientY;
+    try { renderer.domElement.setPointerCapture(e.pointerId); } catch(_) {}
+  });
+  renderer.domElement.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - lastPointerX, dy = e.clientY - lastPointerY;
+    lastPointerX = e.clientX; lastPointerY = e.clientY;
+    cameraYaw -= dx * 0.006;
+    cameraPitch = THREE.MathUtils.clamp(cameraPitch + dy * 0.003, 0.12, 0.62);
+  });
+  function stopDrag() { dragging = false; }
+  renderer.domElement.addEventListener('pointerup', stopDrag);
+  renderer.domElement.addEventListener('pointercancel', stopDrag);
+  renderer.domElement.addEventListener('lostpointercapture', stopDrag);
+  document.getElementById('reset-player').addEventListener('click', () => {
+    player.position.set(0, 0, 0); player.rotation.y = 0;
+    cameraYaw = 0; cameraPitch = 0.28;
+    held.clear();
+    statusEl.textContent = 'スタート地点に戻りました';
+  });
+
+  // ------------------------------------------------------------------
+  // 10. Gamepad API polling (axes / D-pad / left stick)
+  // ------------------------------------------------------------------
+  let activePad = null;
+  window.addEventListener('gamepadconnected', e => {
+    activePad = e.gamepad.index;
+    statusEl.textContent = 'ゲームパッド接続';
+  });
+  window.addEventListener('gamepaddisconnected', e => {
+    if (activePad === e.gamepad.index) activePad = null;
+    statusEl.textContent = 'ゲームパッド切断';
+  });
+  function addGamepadInput() {
+    if (!navigator.getGamepads) return { x: 0, z: 0 };
+    const pads = navigator.getGamepads();
+    let gp = activePad !== null ? pads[activePad] : null;
+    if (!gp) gp = Array.from(pads).find(p => p && p.connected) || null;
+    if (!gp) return { x: 0, z: 0 };
+    const axes = gp.axes || [];
+    let x = Math.abs(axes[0] || 0) > 0.18 ? axes[0] : 0;
+    let z = Math.abs(axes[1] || 0) > 0.18 ? axes[1] : 0;
+    const pressed = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
+    if (pressed(14)) x = -1;
+    if (pressed(15)) x = 1;
+    if (pressed(12)) z = -1;
+    if (pressed(13)) z = 1;
+    return { x, z };
+  }
+
+  function resize() {
+    const w = Math.max(1, wrap.clientWidth), h = Math.max(1, wrap.clientHeight);
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ------------------------------------------------------------------
+  // 11. Main update/render loop
+  // ------------------------------------------------------------------
+  const clock = new THREE.Clock();
+  const camTarget = new THREE.Vector3();
+  const camPosition = new THREE.Vector3();
+  let walkTime = 0;
+  let statusTimer = 0;
+
+  function updateCamera(dt) {
+    const p = player.position;
+    const horiz = Math.cos(cameraPitch) * cameraDistance;
+    camPosition.set(
+      p.x + Math.sin(cameraYaw) * horiz,
+      p.y + 2.1 + Math.sin(cameraPitch) * cameraDistance,
+      p.z + Math.cos(cameraYaw) * horiz
+    );
+    camera.position.lerp(camPosition, 1 - Math.exp(-7 * dt));
+    camTarget.set(p.x, p.y + 1.1, p.z);
+    camera.lookAt(camTarget);
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+
+    let forward = (held.has('forward') ? 1 : 0) - (held.has('back') ? 1 : 0);
+    let strafe = (held.has('right') ? 1 : 0) - (held.has('left') ? 1 : 0);
+    const pad = addGamepadInput();
+    strafe += pad.x;
+    forward -= pad.z;
+    const mag = Math.hypot(strafe, forward);
+    const moving = mag > 0.08;
+
+    if (moving) {
+      strafe /= Math.max(1, mag); forward /= Math.max(1, mag);
+      // Camera-relative movement: pressing forward follows the current camera heading.
+      const forwardX = -Math.sin(cameraYaw), forwardZ = -Math.cos(cameraYaw);
+      const rightX = Math.cos(cameraYaw), rightZ = -Math.sin(cameraYaw);
+      const dx = (forwardX * forward + rightX * strafe) * 5.0 * dt;
+      const dz = (forwardZ * forward + rightZ * strafe) * 5.0 * dt;
+      tryMove(dx, dz);
+      checkTreasureCollision();
+      const realDx = dx, realDz = dz;
+      if (Math.abs(realDx) + Math.abs(realDz) > 0.0001) {
+        const targetYaw = Math.atan2(-realDx, -realDz);
+        // Smooth turning; keep angles continuous over +/- PI.
+        let diff = targetYaw - player.rotation.y;
+        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        player.rotation.y += diff * Math.min(1, dt * 11);
+      }
+      walkTime += dt * 10;
+      const swing = Math.sin(walkTime) * 0.48;
+      legL.rotation.x = swing; legR.rotation.x = -swing;
+      armL.rotation.x = -swing * 0.75; armR.rotation.x = swing * 0.75;
+      visual.position.y = Math.abs(Math.sin(walkTime * 2)) * 0.055;
+      if (statusTimer <= 0) statusEl.textContent = '探索中…';
+    } else {
+      legL.rotation.x *= 0.78; legR.rotation.x *= 0.78;
+      armL.rotation.x *= 0.78; armR.rotation.x *= 0.78;
+      visual.position.y *= 0.75;
+    }
+    if (statusTimer > 0) statusTimer -= dt;
+
+    // Mild, slow shimmer across the water.
+    water.material.opacity = 0.88 + Math.sin(performance.now() * 0.0014) * 0.035;
+    updateCamera(dt);
+    positionEl.textContent = `位置 X: ${player.position.x.toFixed(1)} / Z: ${player.position.z.toFixed(1)}`;
+    renderer.render(scene, camera);
+  }
+
+  statusEl.textContent = `準備完了：丘の当たり判定・宝箱を配置`;
+  animate();
+} catch (err) {
+  console.error('Three.js initialization failed:', err);
+  errorEl.style.display = 'grid';
+  statusEl.textContent = '初期化エラー';
+}
+
+function startPrizeScene() {
+const wrap = document.getElementById('prize-scene-wrap');
+const errorEl = document.getElementById('prize-error');
+const prizeCard = document.getElementById('prize-card');
+
+// 保存された賞品の読み込み
+let savedSubtitle = null, savedTitle = null, savedMessage = null;
+try {
+  savedSubtitle = localStorage.getItem('treasure_subtitle');
+  savedTitle = localStorage.getItem('treasure_title');
+  savedMessage = localStorage.getItem('treasure_message');
+} catch (_) { /* file://環境などで保存領域が使えない場合は初期値を使用 */ }
+
+if (savedSubtitle) document.getElementById('display-subtitle').textContent = savedSubtitle;
+if (savedTitle) document.getElementById('display-title').textContent = savedTitle;
+if (savedMessage) document.getElementById('display-message').textContent = savedMessage;
+
+try {
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x101713, 20, 50);
+
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+  camera.position.set(0, 0.8, 12);
+  // 宝箱と光の演出がある位置を向く
+  camera.lookAt(0, 0, 0);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  wrap.appendChild(renderer.domElement);
+
+  const ambient = new THREE.AmbientLight(0xfff5dc, 1.5);
+  scene.add(ambient);
+  const dirLight = new THREE.DirectionalLight(0xffea9f, 2.5);
+  dirLight.position.set(5, 10, 7);
+  scene.add(dirLight);
+
+  // 宝箱モデルの構築（3D）
+  const treasureGroup = new THREE.Group();
+  scene.add(treasureGroup);
+
+  const woodMat = new THREE.MeshStandardMaterial({ color: 0x875027, roughness: 0.8 });
+  const lidMat = new THREE.MeshStandardMaterial({ color: 0xa9662e, roughness: 0.7 });
+  const goldMat = new THREE.MeshStandardMaterial({ color: 0xe5bd4e, metalness: 0.5, roughness: 0.3 });
+
+  // 箱の本体
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 1.5), woodMat);
+  body.position.y = -0.6;
+  treasureGroup.add(body);
+
+  // 開閉する蓋グループ
+  const lidGroup = new THREE.Group();
+  lidGroup.position.set(0, 0, -0.75); // 蝶番の位置
+  treasureGroup.add(lidGroup);
+
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.4, 1.6), lidMat);
+  lid.position.set(0, 0.2, 0.75);
+  lidGroup.add(lid);
+
+  // 金具の装飾
+  const lock = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.1), goldMat);
+  lock.position.set(0, -0.1, 0.8);
+  lidGroup.add(lock);
+
+  // 宝箱の中からの光（エフェクト）
+  const lightBeamGeo = new THREE.ConeGeometry(1.8, 4, 16, 1, true);
+  const lightBeamMat = new THREE.MeshBasicMaterial({ color: 0xffdf6d, transparent: true, opacity: 0.35, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+  const lightBeam = new THREE.Mesh(lightBeamGeo, lightBeamMat);
+  lightBeam.position.set(0, 2, 0);
+  treasureGroup.add(lightBeam);
+
+  // 紙吹雪パーティクル
+  const particleCount = 120;
+  const particleGeo = new THREE.BufferGeometry();
+  const particlePositions = new Float32Array(particleCount * 3);
+  const particleSpeeds = [];
+
+  for(let i=0; i<particleCount; i++) {
+    particlePositions[i*3] = (Math.random() - 0.5) * 3;
+    particlePositions[i*3+1] = Math.random() * 2;
+    particlePositions[i*3+2] = (Math.random() - 0.5) * 3;
+    particleSpeeds.push({
+      x: (Math.random() - 0.5) * 0.02,
+      y: 0.02 + Math.random() * 0.04,
+      z: (Math.random() - 0.5) * 0.02,
+      rot: Math.random() * 0.1
+    });
+  }
+  particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+  const particleMat = new THREE.PointsMaterial({ color: 0xffcc00, size: 0.12, transparent: true, opacity: 0.9 });
+  const particles = new THREE.Points(particleGeo, particleMat);
+  scene.add(particles);
+
+  function resize() {
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+//    renderer.setSize(w, h, false);
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+
+  let clock = new THREE.Clock();
+  let animationStage = 0; // 0: 閉じた状態, 1: 開くアニメーション, 2: 開ききった状態
+
+  setTimeout(() => {
+    animationStage = 1;
+    setTimeout(() => {
+      prizeCard.classList.add('visible');
+    }, 600);
+  }, 400);
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const dt = clock.getDelta();
+    const elapsedTime = clock.getElapsedTime();
+
+    // 蓋を開くアニメーション（徐々に手前に回転）
+    if (animationStage === 1) {
+      if (lidGroup.rotation.x > -Math.PI * 0.65) {
+        lidGroup.rotation.x -= dt * 3.5;
+      } else {
+        animationStage = 2;
+      }
+    }
+
+    // 宝箱全体を少しふわふわ浮遊させる
+    treasureGroup.position.y = Math.sin(elapsedTime * 2) * 0.1;
+    treasureGroup.rotation.y = Math.sin(elapsedTime * 0.8) * 0.15;
+
+    // 光の柱をきらめかせる
+    lightBeam.material.opacity = 0.25 + Math.sin(elapsedTime * 5) * 0.15;
+
+    // 紙吹雪の動き
+    const posArr = particleGeo.attributes.position.array;
+    for(let i=0; i<particleCount; i++) {
+      posArr[i*3+1] += particleSpeeds[i].y;
+      posArr[i*3] += particleSpeeds[i].x;
+      posArr[i*3+2] += particleSpeeds[i].z;
+      // 上まで行ったら下に戻す
+      if(posArr[i*3+1] > 5) {
+        posArr[i*3+1] = 0;
+        posArr[i*3] = (Math.random() - 0.5) * 1.5;
+        posArr[i*3+2] = (Math.random() - 0.5) * 1.5;
+      }
+    }
+    particleGeo.attributes.position.needsUpdate = true;
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+} catch(e) {
+  console.error(e);
+  errorEl.style.display = 'grid';
+}
+
+
+}
+function closeTreasurePrize() {
+  document.getElementById('prize-screen').classList.remove('active');
+  document.getElementById('scene-wrap').style.visibility = '';
+  document.querySelector('header').style.visibility = '';
+  document.querySelector('.bottom').style.visibility = '';
+}
+document.getElementById('replay-btn').addEventListener('click', () => {
+  // Reload the prize animation without reloading the whole game.
+  const wrap = document.getElementById('prize-scene-wrap');
+  wrap.innerHTML = '';
+  document.getElementById('prize-card').classList.remove('visible');
+  document.getElementById('prize-error').style.display = 'none';
+  startPrizeScene();
+});
+document.getElementById('back-to-game').addEventListener('click', closeTreasurePrize);
+const modal = document.getElementById('settings-modal');
+document.getElementById('open-settings-btn').addEventListener('click', () => modal.classList.add('active'));
+document.getElementById('cancel-settings').addEventListener('click', () => modal.classList.remove('active'));
+document.getElementById('save-settings').addEventListener('click', () => {
+  const sub = document.getElementById('input-subtitle').value;
+  const tit = document.getElementById('input-title').value;
+  const msg = document.getElementById('input-message').value;
+  try {
+    localStorage.setItem('treasure_subtitle', sub);
+    localStorage.setItem('treasure_title', tit);
+    localStorage.setItem('treasure_message', msg);
+  } catch (_) { /* 保存領域が使えない場合も、現在の画面表示は更新 */ }
+  document.getElementById('display-subtitle').textContent = sub;
+  document.getElementById('display-title').textContent = tit;
+  document.getElementById('display-message').textContent = msg;
+  modal.classList.remove('active');
+  alert('賞品の内容を更新しました！');
+});
+
+</script>
+
+<style>
+  /* Overlay UI */
+  .ui-overlay {
+    position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+    padding: 24px;
+  }
+  .header-title {
+    background: rgba(22, 32, 29, 0.85);
+    border: 2px solid var(--accent);
+    padding: 10px 24px;
+    border-radius: 50px;
+    font-size: clamp(18px, 4vw, 26px);
+    font-weight: bold;
+    color: var(--accent);
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+    text-align: center;
+    margin-top: 10px;
+    animation: pulse 2s infinite alternate;
+  }
+  @keyframes pulse {
+    0% { transform: scale(1); box-shadow: 0 0 15px rgba(255, 215, 0, 0.4); }
+    100% { transform: scale(1.05); box-shadow: 0 0 30px rgba(255, 215, 0, 0.8); }
+  }
+
+  /* Prize Card */
+  .prize-card {
+    pointer-events: auto;
+    background: radial-gradient(circle, rgba(40,30,10,0.95) 0%, rgba(15,20,26,0.95) 100%);
+    border: 3px solid var(--accent);
+    border-radius: 20px;
+    padding: 28px 36px;
+    text-align: center;
+    max-width: min(500px, 92vw);
+    box-shadow: 0 0 50px rgba(255, 215, 0, 0.6);
+    opacity: 0;
+    transform: translateY(40px) scale(0.85);
+    transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  .prize-card.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  .prize-subtitle { font-size: clamp(14px, 2.5vw, 18px); color: #e2c076; margin-bottom: 8px; }
+  .prize-name {
+    font-size: clamp(24px, 5vw, 38px);
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 0 10px #ffea79, 0 0 20px #ff9800;
+    margin: 12px 0 16px;
+    line-height: 1.3;
+  }
+  .prize-desc { font-size: clamp(13px, 2vw, 15px); color: #a0b0a3; }
+
+  /* Controls */
+  .bottom-area {
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    z-index: 3;
+  }
+  .controls-bar { display: flex; gap: 12px; }
+  button.action-btn {
+    font: inherit; cursor: pointer;
+    background: linear-gradient(135deg, #ffd700, #ff9800);
+    color: #000;
+    font-weight: bold;
+    border: none;
+    border-radius: 30px;
+    padding: 12px 22px;
+    font-size: 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    transition: transform 0.1s, filter 0.2s;
+  }
+  button.action-btn:hover { filter: brightness(1.15); transform: translateY(-2px); }
+  button.action-btn:active { transform: translateY(1px); }
+  button.secondary-btn {
+    background: #293b30; color: var(--text); border: 1px solid #536657;
+  }
+  button.secondary-btn:hover { background: #354b3b; }
+
+  .back-link {
+    font-size: 13px; color: var(--muted); text-decoration: underline; cursor: pointer;
+  }
+  .back-link:hover { color: #fff; }
+
+  /* Settings Modal for Parents */
+  .settings-modal {
+    position: absolute; inset: 0; z-index: 10;
+    background: rgba(0, 0, 0, 0.85);
+    display: none; justify-content: center; align-items: center;
+    padding: 20px;
+  }
+  .settings-modal.active { display: flex; }
+  .settings-content {
+    background: #1e2923;
+    border: 1px solid #4a6352;
+    border-radius: 16px;
+    padding: 24px;
+    width: 100%; max-width: 420px;
+    color: var(--text);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  }
+  .settings-content h2 { margin-top: 0; font-size: 18px; color: var(--accent); }
+  .form-group { margin-bottom: 16px; text-align: left; }
+  .form-group label { display: block; font-size: 12px; margin-bottom: 6px; color: #b6c2b7; }
+  .form-group input, .form-group textarea {
+    width: 100%; padding: 10px; border-radius: 8px;
+    border: 1px solid #324239; background: #101713; color: #fff;
+    font-family: inherit; font-size: 14px;
+  }
+  .settings-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  #error { display:none; position:absolute; inset:0; z-index:20; padding:30px; background:#17211c; color:white; align-content:center; text-align:center; line-height:1.7; }
+
+#prize-screen { display:none; position:absolute; inset:0; z-index:50; }
+#prize-screen.active { display:block; }
+#prize-scene-wrap { position:absolute; inset:0; z-index:1; background:radial-gradient(circle at center, #233529 0%, #101713 100%); }
+
+#prize-error { display:none; position:absolute; inset:0; z-index:20; padding:30px; background:#17211c; color:white; align-content:center; text-align:center; line-height:1.7; }
+
+</style>
+<div id="prize-screen" aria-label="宝箱の賞品発表">
+  <main id="prize-scene-wrap" aria-label="宝箱オープン3D演出"></main>
+
+  <div class="ui-overlay">
+    <div class="header-title">🎉 宝箱をみつけた！ 🎉</div>
+
+    <div class="prize-card" id="prize-card">
+      <div class="prize-subtitle" id="display-subtitle">おめでとう！ しょうひんは・・・</div>
+      <div class="prize-name" id="display-title">🎁 やよい賞Get!! 🎁</div>
+      <div class="prize-desc" id="display-message">おうちの人に この画面をみせてね！</div>
+    </div>
+
+    <div class="bottom-area">
+      <div class="controls-bar">
+        <button class="action-btn secondary-btn" id="open-settings-btn" type="button">⚙️ 賞品の設定（大人用）</button>
+        <button class="action-btn" id="replay-btn" type="button">🔄 もう一度みる</button>
+      </div>
+      <span class="back-link" id="back-to-game">← ゲームのフィールドに戻る</span>
+    </div>
+  </div>
+
+  <!-- 大人用設定モーダル -->
+  <div class="settings-modal" id="settings-modal">
+    <div class="settings-content">
+      <h2>🎁 賞品内容のかんたん変更</h2>
+      <div class="form-group">
+        <label for="input-subtitle">うえのメッセージ</label>
+        <input type="text" id="input-subtitle" value="おめでとう！ しょうひんは・・・">
+      </div>
+      <div class="form-group">
+        <label for="input-title">しょうひんのなまえ（大きく表示）</label>
+        <input type="text" id="input-title" value="🎁 やよい賞Get!! 🎁">
+      </div>
+      <div class="form-group">
+        <label for="input-message">したのメッセージ</label>
+        <textarea id="input-message" rows="2">おうちの人に この画面をみせてね！</textarea>
+      </div>
+      <div class="settings-actions">
+        <button class="action-btn secondary-btn" id="cancel-settings" type="button">キャンセル</button>
+        <button class="action-btn" id="save-settings" type="button">ほぞんして更新</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="prize-error">3D演出を初期化できませんでした。<br>ブラウザのWebGL設定をご確認ください。</div>
+
+</div>
+</body>
+  </html>
