@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>3D Voxel Sandbox (50x50x50)</title>
+    <!-- Tailwind CSS for UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js for 3D Rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- FontAwesome for UI Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* Crosshair */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 16px;
+            height: 16px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 20;
+        }
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 2px rgba(0,0,0,0.8);
+        }
+        #crosshair::before {
+            top: 7px;
+            left: 0;
+            width: 16px;
+            height: 2px;
+        }
+        #crosshair::after {
+            top: 0;
+            left: 7px;
+            width: 2px;
+            height: 16px;
+        }
+
+        /* Glassmorphism HUD */
+        .glass-panel {
+            background: rgba(20, 24, 33, 0.75);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .hotbar-slot {
+            transition: all 0.15s ease-in-out;
+            position: relative;
+        }
+
+        .hotbar-slot.active {
+            border-color: #60a5fa !important;
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(96, 165, 250, 0.5);
+            z-index: 10;
+        }
+
+        /* Instructions Overlay */
+        #blocker {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(10, 15, 25, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 30;
+            pointer-events: auto;
+        }
+
+        /* Virtual Touch Joystick */
+        #joystick-zone {
+            position: absolute;
+            bottom: 80px;
+            left: 20px;
+            width: 110px;
+            height: 110px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            z-index: 25;
+            touch-action: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #joystick-knob {
+            width: 45px;
+            height: 45px;
+            background: rgba(96, 165, 250, 0.7);
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            position: absolute;
+            pointer-events: none;
+            transition: transform 0.05s ease-out;
+        }
+
+        /* Touch Action Buttons */
+        .touch-btn {
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            pointer-events: auto !important;
+        }
+
+        /* Toast Notification Styling */
+        #toast {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        /* Damage Vignette Effect */
+        #damage-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: radial-gradient(circle, transparent 60%, rgba(239, 68, 68, 0.6) 100%);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 15;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white">
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container"></div>
+
+    <!-- Damage Screen Overlay -->
+    <div id="damage-overlay"></div>
+
+    <!-- Crosshair -->
+    <div id="crosshair"></div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-16 left-1/2 -translate-x-1/2 glass-panel px-6 py-3 rounded-2xl text-sm font-semibold text-white border border-blue-400/40 shadow-2xl opacity-0 pointer-events-none z-50 transform -translate-y-4">
+        メッセージ通知
+    </div>
+
+    <!-- Touch Area for Camera Pan (Right Side) -->
+    <div id="touch-look-zone" class="absolute top-0 right-0 w-1/2 h-full z-10 touch-action-none"></div>
+
+    <!-- Touch Controls UI (Bottom-Left Joystick, Bottom-Right Buttons) -->
+    <div id="touch-controls" class="absolute inset-0 pointer-events-none z-25 hidden">
+        <!-- Virtual Joystick Area -->
+        <div id="joystick-zone" class="pointer-events-auto">
+            <div id="joystick-knob"></div>
+        </div>
+
+        <!-- Action Buttons (Right Side) -->
+        <div class="absolute bottom-20 right-4 flex flex-col space-y-2 pointer-events-auto items-end z-30">
+            <div class="flex space-x-2">
+                <button id="btn-touch-fly" class="touch-btn w-12 h-12 rounded-2xl glass-panel bg-amber-500/20 active:bg-amber-500/50 text-amber-300 font-bold border border-amber-400/40 flex items-center justify-center text-lg shadow-lg">
+                    <i class="fa-solid fa-plane"></i>
+                </button>
+                <button id="btn-touch-jump" class="touch-btn w-12 h-12 rounded-2xl glass-panel bg-blue-500/20 active:bg-blue-500/50 text-blue-300 font-bold border border-blue-400/40 flex items-center justify-center text-lg shadow-lg">
+                    <i class="fa-solid fa-arrow-up"></i>
+                </button>
+            </div>
+            <div class="flex space-x-2">
+                <button id="btn-touch-mine" class="touch-btn w-14 h-14 rounded-2xl glass-panel bg-red-500/20 active:bg-red-500/50 text-red-300 font-bold border border-red-400/40 flex flex-col items-center justify-center text-[10px] shadow-lg">
+                    <i class="fa-solid fa-burst text-base mb-0.5"></i>
+                    <span>掘る/攻撃</span>
+                </button>
+                <button id="btn-touch-place" class="touch-btn w-14 h-14 rounded-2xl glass-panel bg-green-500/20 active:bg-green-500/50 text-green-300 font-bold border border-green-400/40 flex flex-col items-center justify-center text-[10px] shadow-lg">
+                    <i class="fa-solid fa-cube text-base mb-0.5"></i>
+                    <span>置く/食べる</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- UI Overlay / HUD -->
+    <div id="hud" class="absolute inset-0 pointer-events-none flex flex-col justify-between p-2 md:p-4 z-40">
+        <!-- Top Controls & Status Bar -->
+        <div class="flex flex-wrap justify-between items-start gap-1">
+            <div class="glass-panel rounded-xl p-2 px-3 flex flex-col space-y-0.5 pointer-events-auto">
+                <div class="flex items-center space-x-1.5">
+                    <span class="text-[9px] md:text-xs text-blue-400 font-bold uppercase tracking-wider">世界範囲</span>
+                    <span class="text-[9px] md:text-xs bg-blue-500/20 text-blue-300 px-1 py-0.2 rounded border border-blue-500/30">50x50x50</span>
+                </div>
+                <div class="text-[9px] md:text-xs text-slate-300 font-mono" id="pos-display">X: 25.0, Y: 15.0, Z: 25.0</div>
+                <div class="text-[9px] md:text-xs text-slate-400 font-mono" id="fps-display">FPS: 60 | ブロック: 0</div>
+            </div>
+
+            <!-- Mode Switcher, Save / Load / Reset Buttons & Survival HUD -->
+            <div class="flex items-center space-x-1 pointer-events-auto flex-wrap">
+                <button id="btn-mode-toggle" class="glass-panel hover:bg-slate-700/80 text-[10px] md:text-xs px-2 py-1.5 rounded-xl border border-amber-500/40 text-amber-300 font-bold flex items-center space-x-1 shadow-md active:scale-95 transition">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span id="mode-text">サバイバル</span>
+                </button>
+                <button id="btn-save" class="glass-panel hover:bg-slate-700/80 text-[10px] md:text-xs px-2 py-1.5 rounded-xl border border-emerald-500/40 text-emerald-300 font-semibold flex items-center space-x-1 shadow-md active:scale-95 transition">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    <span>保存</span>
+                </button>
+                <button id="btn-load" class="glass-panel hover:bg-slate-700/80 text-[10px] md:text-xs px-2 py-1.5 rounded-xl border border-sky-500/40 text-sky-300 font-semibold flex items-center space-x-1 shadow-md active:scale-95 transition">
+                    <i class="fa-solid fa-folder-open"></i>
+                    <span>読込</span>
+                </button>
+                <button id="btn-reset" class="glass-panel hover:bg-slate-700/80 text-[10px] md:text-xs px-2 py-1.5 rounded-xl border border-rose-500/40 text-rose-300 font-semibold flex items-center space-x-0.5 shadow-md active:scale-95 transition">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span>リセット</span>
+                </button>
+
+                <!-- Survival HUD (Health & Hunger Bars) -->
+                <div id="survival-stats" class="flex items-center space-x-2 glass-panel px-2.5 py-1.5 rounded-xl border border-slate-700 text-xs ml-1">
+                    <div class="flex items-center space-x-1">
+                        <span class="text-rose-400 font-bold mr-0.5"><i class="fa-solid fa-heart"></i></span>
+                        <div id="health-hearts" class="flex text-rose-500 text-[10px] space-x-0.5"></div>
+                    </div>
+                    <div class="flex items-center space-x-1">
+                        <span class="text-amber-400 font-bold mr-0.5"><i class="fa-solid fa-drumstick-bite"></i></span>
+                        <div id="hunger-icons" class="flex text-amber-600 text-[10px] space-x-0.5"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fly mode indicator -->
+            <div class="glass-panel rounded-xl p-2 px-3 items-center space-x-1.5 hidden md:flex pointer-events-auto">
+                <i class="fa-solid fa-plane-departure text-amber-400 text-xs"></i>
+                <div class="text-xs">
+                    <span class="text-slate-400">飛行: </span>
+                    <span id="fly-status" class="font-bold text-amber-400">OFF (F)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hotbar (Bottom Center) -->
+        <div class="self-center flex flex-col items-center mb-2 pointer-events-auto max-w-full px-1">
+            <div id="hotbar" class="glass-panel p-1 md:p-2 rounded-2xl flex space-x-1 border border-slate-700/50 shadow-2xl overflow-x-auto max-w-full"></div>
+        </div>
+    </div>
+
+    <!-- Start / Pause / Game Over Screen Overlay -->
+    <div id="blocker">
+        <div class="glass-panel max-w-lg w-11/12 p-5 md:p-8 rounded-3xl text-center space-y-4 shadow-2xl border border-slate-700/60 my-auto overflow-y-auto max-h-[90vh]">
+            <div class="space-y-1">
+                <div id="screen-icon" class="inline-flex items-center justify-center w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-blue-600/30 text-blue-400 mb-1 border border-blue-500/40">
+                    <i class="fa-solid fa-cubes text-2xl md:text-3xl"></i>
+                </div>
+                <h1 id="screen-title" class="text-2xl md:text-3xl font-extrabold tracking-tight text-white">3D ボクセル サンドボックス</h1>
+                <p id="screen-subtitle" class="text-xs md:text-sm text-slate-300">スマホ・タブレット・PC対応サバイバル建築ゲーム</p>
+            </div>
+
+            <!-- Controls List -->
+            <div class="bg-slate-900/60 p-3 rounded-2xl text-left text-[11px] md:text-xs space-y-1.5 border border-slate-800">
+                <div class="flex justify-between items-center"><span class="text-slate-400">移動:</span> <span class="font-mono bg-slate-800 px-1.5 py-0.5 rounded text-blue-300">左下ジョイスティック / WASD</span></div>
+                <div class="flex justify-between items-center"><span class="text-slate-400">視点移動:</span> <span class="font-mono bg-slate-800 px-1.5 py-0.5 rounded text-blue-300">右画面スワイプ / マウス</span></div>
+                <div class="flex justify-between items-center"><span class="text-slate-400">ジャンプ / 浮上:</span> <span class="font-mono bg-slate-800 px-1.5 py-0.5 rounded text-blue-300">右上の矢印ボタン / Space</span></div>
+                <div class="flex justify-between items-center"><span class="text-slate-400">掘る / 攻撃:</span> <span class="font-mono bg-slate-800 px-1.5 py-0.5 rounded text-red-400">右下の「掘る」ボタン / 左クリック</span></div>
+                <div class="flex justify-between items-center"><span class="text-slate-400">置く / 食べる:</span> <span class="font-mono bg-slate-800 px-1.5 py-0.5 rounded text-green-400">右下の「置く」ボタン / 右クリック</span></div>
+                <div class="flex justify-between items-center"><span class="text-slate-400">ブロック選択:</span> <span class="font-mono bg-slate-800 px-1.5 py-0.5 rounded text-yellow-300">画面下のホットバーをタップ / 1~0キー</span></div>
+            </div>
+
+            <button id="play-btn" class="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-2xl transition duration-200 transform hover:scale-[1.02] shadow-lg shadow-blue-500/25 flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-play"></i>
+                <span id="play-btn-text">タップしてスタート</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Game Script -->
+    <script>
+        const WORLD_SIZE = 50;
+        const BLOCK_SIZE = 1;
+        const SAVE_KEY = 'voxel_sandbox_world';
+        
+        const BLOCK_TYPES = {
+            1: { id: 1, name: '草', color: '#557a2b', topColor: '#72b030', sideColor: '#557a2b', transparent: false, isFood: false },
+            2: { id: 2, name: '土', color: '#866043', topColor: '#866043', sideColor: '#866043', transparent: false, isFood: false },
+            3: { id: 3, name: '石', color: '#737373', topColor: '#808080', sideColor: '#6e6e6e', transparent: false, isFood: false },
+            4: { id: 4, name: '木', color: '#5c4033', topColor: '#8b5a2b', sideColor: '#5c4033', transparent: false, isFood: false },
+            5: { id: 5, name: '葉', color: '#2e7d32', topColor: '#388e3c', sideColor: '#2e7d32', transparent: true, opacity: 0.9, isFood: false },
+            6: { id: 6, name: 'レンガ', color: '#9e4730', topColor: '#a84c34', sideColor: '#9e4730', transparent: false, isFood: false },
+            7: { id: 7, name: 'ガラス', color: '#a6dcef', topColor: '#a6dcef', sideColor: '#a6dcef', transparent: true, opacity: 0.4, isFood: false },
+            8: { id: 8, name: '砂', color: '#d8c580', topColor: '#dfce8b', sideColor: '#d8c580', transparent: false, isFood: false },
+            9: { id: 9, name: '金', color: '#eab308', topColor: '#facc15', sideColor: '#ca8a04', transparent: false, isFood: false },
+            10: { id: 10, name: 'リンゴ', color: '#ef4444', topColor: '#ef4444', sideColor: '#ef4444', transparent: true, isFood: true, heal: 20, hungerRestore: 30 }
+        };
+
+        const inventory = { 1: 10, 2: 10, 3: 10, 4: 5, 5: 5, 6: 0, 7: 0, 8: 0, 9: 0, 10: 2 };
+
+        function generateBlockTextures(type) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 16;
+            canvas.height = 16;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = type.color;
+            ctx.fillRect(0, 0, 16, 16);
+
+            for (let x = 0; x < 16; x++) {
+                for (let y = 0; y < 16; y++) {
+                    if (Math.random() > 0.6) {
+                        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
+                        ctx.fillRect(x, y, 1, 1);
+                    }
+                }
+            }
+
+            if (type.id === 1) {
+                ctx.fillStyle = type.topColor;
+                ctx.fillRect(0, 0, 16, 16);
+                for (let x = 0; x < 16; x++) {
+                    for (let y = 0; y < 16; y++) {
+                        if (Math.random() > 0.5) {
+                            ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                            ctx.fillRect(x, y, 1, 1);
+                        }
+                    }
+                }
+            } else if (type.id === 10) {
+                ctx.fillStyle = '#ef4444';
+                ctx.beginPath();
+                ctx.arc(8, 9, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#15803d';
+                ctx.fillRect(7, 2, 2, 3);
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.magFilter = THREE.NearestFilter;
+            texture.minFilter = THREE.NearestFilter;
+            return texture;
+        }
+
+        let scene, camera, renderer;
+        let selectedBlockId = 1;
+        let worldData = new Map();
+        let highlightBox;
+        let raycaster, mouse;
+        let isTouchDevice = false;
+        
+        let gameMode = 'survival';
+        let isGameOver = false;
+
+        const playerStats = { maxHealth: 100, health: 100, maxHunger: 100, hunger: 100, lastFallY: 0 };
+
+        let isLocked = false;
+        let isFlying = false;
+        const velocity = new THREE.Vector3();
+        const moveState = { forward: 0, backward: 0, left: 0, right: 0, up: 0, down: 0 };
+        let prevTime = performance.now();
+        const player = { height: 1.6, radius: 0.25, onGround: false, speed: 8.0, flySpeed: 16.0 };
+
+        const mobs = [];
+        const droppedItems = [];
+
+        let frameCount = 0;
+        let lastFpsTime = performance.now();
+        let currentFps = 60;
+        let mobSpawnTimer = 0;
+        let hungerTimer = 0;
+
+        let playerArm;
+        let isSwinging = false;
+        let swingProgress = 0;
+
+        window.onload = function() {
+            isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            if (isTouchDevice) {
+                document.getElementById('touch-controls').classList.remove('hidden');
+            }
+
+            initScene();
+            initMaterials();
+            initPlayerArm();
+            generateTerrain();
+            createWorldBoundary();
+            initControls();
+            initTouchControls();
+            initSaveLoadSystem();
+            buildHotbarUI();
+            updateModeUI();
+            updateSurvivalHUD();
+            
+            animate();
+        };
+
+        const blockMaterials = {};
+        function initMaterials() {
+            Object.values(BLOCK_TYPES).forEach(type => {
+                const texture = generateBlockTextures(type);
+                blockMaterials[type.id] = new THREE.MeshStandardMaterial({
+                    map: texture,
+                    transparent: type.transparent,
+                    opacity: type.opacity || 1.0,
+                    roughness: 0.8,
+                    metalness: 0.1
+                });
+            });
+        }
+
+        const sharedGeometry = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+
+        function initScene() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb);
+            scene.fog = new THREE.FogExp2(0x87ceeb, 0.015);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(WORLD_SIZE / 2, 12, WORLD_SIZE / 2);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(1);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            sunLight.position.set(WORLD_SIZE * 1.5, WORLD_SIZE * 2, WORLD_SIZE * 1.5);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 512;
+            sunLight.shadow.mapSize.height = 512;
+            scene.add(sunLight);
+
+            const wireframeGeo = new THREE.BoxGeometry(1.002, 1.002, 1.002);
+            const wireframeMat = new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true, wireframeLinewidth: 2 });
+            highlightBox = new THREE.Mesh(wireframeGeo, wireframeMat);
+            highlightBox.visible = false;
+            scene.add(highlightBox);
+
+            raycaster = new THREE.Raycaster();
+            raycaster.far = 6.0;
+            mouse = new THREE.Vector2(0, 0);
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function initPlayerArm() {
+            const armGeo = new THREE.BoxGeometry(0.2, 0.6, 0.2);
+            const armMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.6 });
+            playerArm = new THREE.Mesh(armGeo, armMat);
+            playerArm.position.set(0.3, -0.35, -0.5);
+            playerArm.rotation.x = Math.PI / 6;
+            camera.add(playerArm);
+            scene.add(camera);
+        }
+
+        function createWorldBoundary() {
+            const boundaryGeo = new THREE.BoxGeometry(WORLD_SIZE, WORLD_SIZE, WORLD_SIZE);
+            const wireframeMat = new THREE.MeshBasicMaterial({ color: 0x60a5fa, wireframe: true, transparent: true, opacity: 0.25 });
+            const boundaryMesh = new THREE.Mesh(boundaryGeo, wireframeMat);
+            boundaryMesh.position.set(WORLD_SIZE / 2, WORLD_SIZE / 2, WORLD_SIZE / 2);
+            scene.add(boundaryMesh);
+        }
+
+        function getTerrainHeight(x, z) {
+            const nx = x / WORLD_SIZE;
+            const nz = z / WORLD_SIZE;
+            let h = Math.sin(nx * Math.PI * 2) * 3 + Math.cos(nz * Math.PI * 2) * 3;
+            h += Math.sin(nx * Math.PI * 6 + nz * Math.PI * 4) * 1.5;
+            return Math.floor(Math.max(2, 6 + h));
+        }
+
+        function clearWorld() {
+            worldData.forEach((block) => {
+                scene.remove(block.mesh);
+                block.mesh.geometry.dispose();
+            });
+            worldData.clear();
+            mobs.forEach(m => scene.remove(m.mesh));
+            mobs.length = 0;
+            droppedItems.forEach(i => scene.remove(i.mesh));
+            droppedItems.length = 0;
+        }
+
+        function generateTerrain() {
+            clearWorld();
+            for (let x = 0; x < WORLD_SIZE; x++) {
+                for (let z = 0; z < WORLD_SIZE; z++) {
+                    const height = getTerrainHeight(x, z);
+                    for (let y = 0; y <= height; y++) {
+                        let blockType = 3;
+                        if (y === height) blockType = 1;
+                        else if (y >= height - 2) blockType = 2;
+                        addBlock(x, y, z, blockType);
+                    }
+                    if (x > 2 && x < WORLD_SIZE - 2 && z > 2 && z < WORLD_SIZE - 2) {
+                        if (Math.random() < 0.015) createTree(x, height + 1, z);
+                    }
+                }
+            }
+        }
+
+        function createTree(x, startY, z) {
+            const trunkHeight = 4 + Math.floor(Math.random() * 2);
+            for (let y = 0; y < trunkHeight; y++) {
+                if (startY + y < WORLD_SIZE) addBlock(x, startY + y, z, 4);
+            }
+            const leafStart = startY + trunkHeight - 2;
+            for (let lx = -2; lx <= 2; lx++) {
+                for (let lz = -2; lz <= 2; lz++) {
+                    for (let ly = 0; ly <= 2; ly++) {
+                        if (Math.abs(lx) === 2 && Math.abs(lz) === 2 && Math.random() > 0.5) continue;
+                        const px = x + lx, py = leafStart + ly, pz = z + lz;
+                        if (px >= 0 && px < WORLD_SIZE && pz >= 0 && pz < WORLD_SIZE && py < WORLD_SIZE) {
+                            if (!worldData.has(`${px},${py},${pz}`)) addBlock(px, py, pz, 5);
+                        }
+                    }
+                }
+            }
+        }
+
+        function addBlock(x, y, z, typeId) {
+            if (x < 0 || x >= WORLD_SIZE || y < 0 || y >= WORLD_SIZE || z < 0 || z >= WORLD_SIZE) return;
+            const key = `${x},${y},${z}`;
+            if (worldData.has(key)) return;
+
+            const mesh = new THREE.Mesh(sharedGeometry, blockMaterials[typeId]);
+            mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.userData = { x, y, z, typeId };
+
+            scene.add(mesh);
+            worldData.set(key, { mesh, typeId });
+        }
+
+        function removeBlock(x, y, z) {
+            const key = `${x},${y},${z}`;
+            if (worldData.has(key)) {
+                const block = worldData.get(key);
+                if (gameMode === 'survival') {
+                    const typeId = block.typeId;
+                    inventory[typeId] = (inventory[typeId] || 0) + 1;
+                    updateHotbarUI();
+                }
+                scene.remove(block.mesh);
+                block.mesh.geometry.dispose();
+                worldData.delete(key);
+            }
+        }
+
+        function spawnZombie() {
+            if (mobs.length >= 3) return;
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 12 + Math.random() * 10;
+            const px = Math.floor(camera.position.x + Math.cos(angle) * dist);
+            const pz = Math.floor(camera.position.z + Math.sin(angle) * dist);
+
+            if (px < 1 || px >= WORLD_SIZE - 1 || pz < 1 || pz >= WORLD_SIZE - 1) return;
+
+            let py = WORLD_SIZE - 1;
+            while (py > 0 && !worldData.has(`${px},${py},${pz}`)) { py--; }
+            py += 1;
+
+            const group = new THREE.Group();
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x15803d });
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.2, 0.4), bodyMat);
+            body.position.y = 0.6;
+            group.add(body);
+
+            const headMat = new THREE.MeshStandardMaterial({ color: 0x166534 });
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), headMat);
+            head.position.y = 1.45;
+            group.add(head);
+
+            group.position.set(px + 0.5, py, pz + 0.5);
+            scene.add(group);
+
+            mobs.push({ mesh: group, health: 40, speed: 3.0, lastAttackTime: 0 });
+            showToast('🧟 敵（ゾンビ）が現れた！');
+        }
+
+        function updateMobs(delta) {
+            const pPos = camera.position;
+            const mobRaycaster = new THREE.Raycaster();
+
+            for (let i = mobs.length - 1; i >= 0; i--) {
+                const mob = mobs[i];
+                const mPos = mob.mesh.position;
+                const dir = new THREE.Vector3().subVectors(pPos, mPos);
+                dir.y = 0;
+                const dist = dir.length();
+
+                if (dist > 0.8) {
+                    dir.normalize();
+                    mPos.addScaledVector(dir, mob.speed * delta);
+                    
+                    const mx = Math.floor(mPos.x);
+                    const mz = Math.floor(mPos.z);
+                    let groundY = 0;
+                    let mobFootY = Math.floor(mPos.y);
+                    for (let checkY = mobFootY; checkY >= 0; checkY--) {
+                        if (worldData.has(`${mx},${checkY},${mz}`)) {
+                            groundY = checkY + 1;
+                            break;
+                        }
+                    }
+                    mPos.y = groundY;
+
+                    mob.mesh.lookAt(pPos.x, mPos.y, pPos.z);
+                } else if (gameMode === 'survival') {
+                    const now = performance.now();
+                    if (now - mob.lastAttackTime > 1200) {
+                        const yDiff = Math.abs(mPos.y - (pPos.y - player.height));
+                        if (yDiff < 1.8) {
+                            const mobEyePos = mPos.clone().add(new THREE.Vector3(0, 1.2, 0));
+                            const playerCenterPos = pPos.clone().sub(new THREE.Vector3(0, player.height / 2, 0));
+                            const attackDir = new THREE.Vector3().subVectors(playerCenterPos, mobEyePos);
+                            const attackDist = attackDir.length();
+                            attackDir.normalize();
+
+                            mobRaycaster.set(mobEyePos, attackDir);
+                            mobRaycaster.far = attackDist;
+
+                            const blockMeshes = Array.from(worldData.values()).map(b => b.mesh);
+                            const hits = mobRaycaster.intersectObjects(blockMeshes);
+
+                            if (hits.length === 0) {
+                                damagePlayer(15, '🧟 ゾンビに攻撃された！');
+                                mob.lastAttackTime = now;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function spawnDropItem(position, typeId) {
+            const geo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+            const mesh = new THREE.Mesh(geo, blockMaterials[typeId]);
+            mesh.position.copy(position);
+            scene.add(mesh);
+            droppedItems.push({ mesh, typeId, createdAt: performance.now() });
+        }
+
+        function updateDroppedItems(delta) {
+            const pPos = camera.position;
+            for (let i = droppedItems.length - 1; i >= 0; i--) {
+                const item = droppedItems[i];
+                item.mesh.rotation.y += delta * 2;
+                const dist = item.mesh.position.distanceTo(pPos);
+                if (dist < 1.5) {
+                    inventory[item.typeId] = (inventory[item.typeId] || 0) + 1;
+                    showToast(`🍎 ${BLOCK_TYPES[item.typeId].name} を拾った！`);
+                    scene.remove(item.mesh);
+                    droppedItems.splice(i, 1);
+                    updateHotbarUI();
+                }
+            }
+        }
+
+        function damagePlayer(amount, reason) {
+            if (gameMode !== 'survival' || isGameOver) return;
+            playerStats.health = Math.max(0, playerStats.health - amount);
+            updateSurvivalHUD();
+
+            const overlay = document.getElementById('damage-overlay');
+            overlay.style.opacity = '1';
+            setTimeout(() => { overlay.style.opacity = '0'; }, 300);
+
+            showToast(reason);
+            if (playerStats.health <= 0) triggerGameOver();
+        }
+
+        function triggerGameOver() {
+            isGameOver = true;
+            document.exitPointerLock();
+            const blocker = document.getElementById('blocker');
+            document.getElementById('screen-icon').innerHTML = '<i class="fa-solid fa-skull text-rose-500 text-3xl"></i>';
+            document.getElementById('screen-title').innerText = 'YOU DIED';
+            document.getElementById('screen-subtitle').innerText = '力尽きてしまった...';
+            document.getElementById('play-btn-text').innerText = 'リスポーン (復活)';
+            blocker.style.display = 'flex';
+        }
+
+        function respawnPlayer() {
+            playerStats.health = 100;
+            playerStats.hunger = 100;
+            isGameOver = false;
+            camera.position.set(WORLD_SIZE / 2, 15, WORLD_SIZE / 2);
+            updateSurvivalHUD();
+            showToast('リスポーンしました');
+        }
+
+        function triggerArmSwing() {
+            isSwinging = true;
+            swingProgress = 0;
+        }
+
+        function updateArmAnimation(delta) {
+            if (!isSwinging || !playerArm) return;
+            swingProgress += delta * 15;
+            if (swingProgress < Math.PI) {
+                playerArm.rotation.x = (Math.PI / 6) - Math.sin(swingProgress) * 0.8;
+            } else {
+                playerArm.rotation.x = Math.PI / 6;
+                isSwinging = false;
+            }
+        }
+
+        function performPrimaryAction() {
+            triggerArmSwing();
+            raycaster.setFromCamera(mouse, camera);
+
+            let hitMobIndex = -1;
+            let minDistance = 3.5;
+
+            for (let i = 0; i < mobs.length; i++) {
+                const mob = mobs[i];
+                const dist = camera.position.distanceTo(mob.mesh.position);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    hitMobIndex = i;
+                }
+            }
+
+            if (hitMobIndex === -1) {
+                const mobMeshes = mobs.map(m => m.mesh);
+                const mobHits = raycaster.intersectObjects(mobMeshes, true);
+                if (mobHits.length > 0) {
+                    const hitObj = mobHits[0].object;
+                    let parentGroup = hitObj.parent;
+                    while (parentGroup && parentGroup.type !== 'Group') parentGroup = parentGroup.parent;
+                    hitMobIndex = mobs.findIndex(m => m.mesh === parentGroup);
+                }
+            }
+
+            if (hitMobIndex !== -1) {
+                const mob = mobs[hitMobIndex];
+                mob.health -= 20;
+                showToast('💥 ゾンビに攻撃！');
+                if (mob.health <= 0) {
+                    spawnDropItem(mob.mesh.position.clone().add(new THREE.Vector3(0, 0.5, 0)), 10);
+                    scene.remove(mob.mesh);
+                    mobs.splice(hitMobIndex, 1);
+                    showToast('⚔️ ゾンビを倒した！');
+                }
+                return;
+            }
+
+            mineBlock();
+        }
+
+        function mineBlock() {
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(Array.from(worldData.values()).map(b => b.mesh));
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const bPos = hit.object.userData;
+                removeBlock(bPos.x, bPos.y, bPos.z);
+            }
+        }
+
+        function performSecondaryAction() {
+            triggerArmSwing();
+            const currentItem = BLOCK_TYPES[selectedBlockId];
+
+            if (currentItem && currentItem.isFood) {
+                if (gameMode === 'survival') {
+                    if (inventory[selectedBlockId] <= 0) {
+                        showToast('リンゴがありません');
+                        return;
+                    }
+                    inventory[selectedBlockId]--;
+                }
+                playerStats.health = Math.min(100, playerStats.health + currentItem.heal);
+                playerStats.hunger = Math.min(100, playerStats.hunger + currentItem.hungerRestore);
+                updateSurvivalHUD();
+                updateHotbarUI();
+                showToast('🍎 リンゴを食べて回復した！');
+                return;
+            }
+
+            placeBlock();
+        }
+
+        function placeBlock() {
+            if (gameMode === 'survival' && (inventory[selectedBlockId] || 0) <= 0) {
+                showToast('ブロックの所持数が足りません');
+                return;
+            }
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(Array.from(worldData.values()).map(b => b.mesh));
+
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const bPos = hit.object.userData;
+                const normal = hit.face.normal;
+                const targetX = bPos.x + normal.x;
+                const targetY = bPos.y + normal.y;
+                const targetZ = bPos.z + normal.z;
+
+                const pPos = camera.position;
+                const playerBox = new THREE.Box3(
+                    new THREE.Vector3(pPos.x - 0.25, pPos.y - player.height, pPos.z - 0.25),
+                    new THREE.Vector3(pPos.x + 0.25, pPos.y + 0.1, pPos.z + 0.25)
+                );
+                const blockBox = new THREE.Box3(
+                    new THREE.Vector3(targetX, targetY, targetZ),
+                    new THREE.Vector3(targetX + 1, targetY + 1, targetZ + 1)
+                );
+
+                if (!playerBox.intersectsBox(blockBox) || isFlying) {
+                    addBlock(targetX, targetY, targetZ, selectedBlockId);
+                    if (gameMode === 'survival') {
+                        inventory[selectedBlockId]--;
+                        updateHotbarUI();
+                    }
+                }
+            }
+        }
+
+        function toggleFly() {
+            if (gameMode === 'survival') {
+                showToast('サバイバルモードでは飛行できません');
+                return;
+            }
+            isFlying = !isFlying;
+            const flyStatusEl = document.getElementById('fly-status');
+            if (flyStatusEl) {
+                flyStatusEl.innerText = isFlying ? 'ON (飛行中)' : 'OFF (グラビティON)';
+                flyStatusEl.className = isFlying ? 'font-bold text-green-400' : 'font-bold text-amber-400';
+            }
+            showToast(isFlying ? '飛行モード: ON' : '飛行モード: OFF');
+        }
+
+        function setGameMode(mode) {
+            gameMode = mode;
+            if (gameMode === 'survival') isFlying = false;
+            updateModeUI();
+            buildHotbarUI();
+            showToast(gameMode === 'survival' ? 'サバイバルモードに切替' : 'クリエイティブモードに切替');
+        }
+
+        function updateModeUI() {
+            const modeBtn = document.getElementById('btn-mode-toggle');
+            const modeText = document.getElementById('mode-text');
+            const survivalHUD = document.getElementById('survival-stats');
+
+            if (gameMode === 'survival') {
+                modeText.innerText = 'サバイバル';
+                modeBtn.className = 'glass-panel hover:bg-slate-700/80 text-[10px] md:text-xs px-2 py-1.5 rounded-xl border border-rose-500/40 text-rose-300 font-bold flex items-center space-x-1 shadow-md active:scale-95 transition';
+                survivalHUD.style.display = 'flex';
+            } else {
+                modeText.innerText = 'クリエイティブ';
+                modeBtn.className = 'glass-panel hover:bg-slate-700/80 text-[10px] md:text-xs px-2 py-1.5 rounded-xl border border-amber-500/40 text-amber-300 font-bold flex items-center space-x-1 shadow-md active:scale-95 transition';
+                survivalHUD.style.display = 'none';
+            }
+        }
+
+        function updateSurvivalHUD() {
+            const heartsContainer = document.getElementById('health-hearts');
+            heartsContainer.innerHTML = '';
+            const heartCount = Math.ceil(playerStats.health / 10);
+            for (let i = 0; i < 10; i++) {
+                const heart = document.createElement('i');
+                heart.className = i < heartCount ? 'fa-solid fa-heart' : 'fa-regular fa-heart opacity-30';
+                heartsContainer.appendChild(heart);
+            }
+
+            const hungerContainer = document.getElementById('hunger-icons');
+            hungerContainer.innerHTML = '';
+            const hungerCount = Math.ceil(playerStats.hunger / 10);
+            for (let i = 0; i < 10; i++) {
+                const meat = document.createElement('i');
+                meat.className = i < hungerCount ? 'fa-solid fa-drumstick-bite' : 'fa-solid fa-drumstick-bite opacity-30';
+                hungerContainer.appendChild(meat);
+            }
+        }
+
+        let toastTimeout;
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.innerText = message;
+            toast.classList.remove('opacity-0', '-translate-y-4');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', '-translate-y-4');
+            }, 2500);
+        }
+
+        function initSaveLoadSystem() {
+            document.getElementById('btn-mode-toggle').addEventListener('click', (e) => {
+                e.stopPropagation();
+                setGameMode(gameMode === 'survival' ? 'creative' : 'survival');
+            });
+
+            document.getElementById('btn-save').addEventListener('click', (e) => {
+                e.stopPropagation();
+                try {
+                    const savedArray = [];
+                    worldData.forEach((val, key) => {
+                        savedArray.push({
+                            x: val.mesh.userData.x,
+                            y: val.mesh.userData.y,
+                            z: val.mesh.userData.z,
+                            typeId: val.typeId
+                        });
+                    });
+
+                    const saveData = {
+                        blocks: savedArray,
+                        inventory,
+                        playerStats,
+                        gameMode,
+                        player: { x: camera.position.x, y: camera.position.y, z: camera.position.z }
+                    };
+
+                    localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+                    showToast('世界を保存しました！');
+                } catch (err) {
+                    showToast('保存に失敗しました');
+                }
+            });
+
+            document.getElementById('btn-load').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const raw = localStorage.getItem(SAVE_KEY);
+                if (!raw) {
+                    showToast('保存されたデータがありません');
+                    return;
+                }
+
+                try {
+                    const saveData = JSON.parse(raw);
+                    clearWorld();
+
+                    saveData.blocks.forEach(b => { addBlock(b.x, b.y, b.z, b.typeId); });
+                    if (saveData.inventory) Object.assign(inventory, saveData.inventory);
+                    if (saveData.playerStats) Object.assign(playerStats, saveData.playerStats);
+                    if (saveData.gameMode) setGameMode(saveData.gameMode);
+                    if (saveData.player) camera.position.set(saveData.player.x, saveData.player.y, saveData.player.z);
+
+                    updateSurvivalHUD();
+                    buildHotbarUI();
+                    showToast('世界を読み込みました！');
+                } catch (err) {
+                    showToast('読み込み中にエラーが発生しました');
+                }
+            });
+
+            document.getElementById('btn-reset').addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm('初期の地形にリセットしますか？')) {
+                    generateTerrain();
+                    camera.position.set(WORLD_SIZE / 2, 12, WORLD_SIZE / 2);
+                    showToast('初期地形にリセットしました');
+                }
+            });
+        }
+
+        function initControls() {
+            const blocker = document.getElementById('blocker');
+
+            blocker.addEventListener('click', () => {
+                if (isGameOver) {
+                    respawnPlayer();
+                    document.getElementById('screen-icon').innerHTML = '<i class="fa-solid fa-cubes text-2xl md:text-3xl"></i>';
+                    document.getElementById('screen-title').innerText = '3D ボクセル サンドボックス';
+                    document.getElementById('screen-subtitle').innerText = 'スマホ・タブレット・PC対応サバイバル建築ゲーム';
+                    document.getElementById('play-btn-text').innerText = 'タップしてスタート';
+                }
+
+                if (!isTouchDevice) {
+                    document.body.requestPointerLock();
+                } else {
+                    isLocked = true;
+                    blocker.style.display = 'none';
+                }
+            });
+
+            document.addEventListener('pointerlockchange', () => {
+                if (document.pointerLockElement === document.body) {
+                    isLocked = true;
+                    blocker.style.display = 'none';
+                } else if (!isTouchDevice && !isGameOver) {
+                    isLocked = false;
+                    blocker.style.display = 'flex';
+                }
+            });
+
+            document.addEventListener('mousemove', (event) => {
+                if (!isLocked || isTouchDevice) return;
+                rotateCamera(event.movementX * 0.002, event.movementY * 0.002);
+            });
+
+            document.addEventListener('keydown', (e) => {
+                switch (e.code) {
+                    case 'KeyW': case 'ArrowUp': moveState.forward = 1; break;
+                    case 'KeyS': case 'ArrowDown': moveState.backward = 1; break;
+                    case 'KeyA': case 'ArrowLeft': moveState.left = 1; break;
+                    case 'KeyD': case 'ArrowRight': moveState.right = 1; break;
+                    case 'Space': moveState.up = 1; break;
+                    case 'ShiftLeft': case 'ShiftRight': moveState.down = 1; break;
+                    case 'KeyF': toggleFly(); break;
+                    case 'KeyP': setGameMode(gameMode === 'survival' ? 'creative' : 'survival'); break;
+                    case 'KeyE':
+                        selectedBlockId = (selectedBlockId % Object.keys(BLOCK_TYPES).length) + 1;
+                        updateHotbarUI();
+                        break;
+                    case 'KeyQ':
+                        const total = Object.keys(BLOCK_TYPES).length;
+                        selectedBlockId = ((selectedBlockId - 2 + total) % total) + 1;
+                        updateHotbarUI();
+                        break;
+                }
+
+                if (e.key >= '1' && e.key <= '9') {
+                    selectedBlockId = parseInt(e.key);
+                    updateHotbarUI();
+                } else if (e.key === '0') {
+                    selectedBlockId = 10;
+                    updateHotbarUI();
+                }
+            });
+
+            document.addEventListener('keyup', (e) => {
+                switch (e.code) {
+                    case 'KeyW': case 'ArrowUp': moveState.forward = 0; break;
+                    case 'KeyS': case 'ArrowDown': moveState.backward = 0; break;
+                    case 'KeyA': case 'ArrowLeft': moveState.left = 0; break;
+                    case 'KeyD': case 'ArrowRight': moveState.right = 0; break;
+                    case 'Space': moveState.up = 0; break;
+                    case 'ShiftLeft': case 'ShiftRight': moveState.down = 0; break;
+                }
+            });
+
+            document.addEventListener('mousedown', (e) => {
+                if (!isLocked || isTouchDevice) return;
+                if (e.target.closest('#hud') || e.target.closest('button')) return;
+
+                if (e.button === 0) performPrimaryAction();
+                else if (e.button === 2) performSecondaryAction();
+            });
+
+            document.addEventListener('wheel', (e) => {
+                if (!isLocked) return;
+                const total = Object.keys(BLOCK_TYPES).length;
+                if (e.deltaY > 0) {
+                    selectedBlockId = (selectedBlockId % total) + 1;
+                } else {
+                    selectedBlockId = ((selectedBlockId - 2 + total) % total) + 1;
+                }
+                updateHotbarUI();
+            });
+
+            document.addEventListener('contextmenu', e => {
+                if (isLocked) e.preventDefault();
+            });
+        }
+
+        function rotateCamera(deltaYaw, deltaPitch) {
+            const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+            euler.setFromQuaternion(camera.quaternion);
+            euler.y -= deltaYaw;
+            euler.x -= deltaPitch;
+            euler.x = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, euler.x));
+            camera.quaternion.setFromEuler(euler);
+        }
+
+        function initTouchControls() {
+            const joystickZone = document.getElementById('joystick-zone');
+            const joystickKnob = document.getElementById('joystick-knob');
+            const touchLookZone = document.getElementById('touch-look-zone');
+
+            let joystickTouchId = null;
+            let joystickCenter = { x: 0, y: 0 };
+            const maxRadius = 35;
+
+            joystickZone.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (joystickTouchId !== null) return;
+                const touch = e.changedTouches[0];
+                joystickTouchId = touch.identifier;
+                const rect = joystickZone.getBoundingClientRect();
+                joystickCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+            }, { passive: false });
+
+            window.addEventListener('touchmove', (e) => {
+                if (joystickTouchId === null) return;
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    const touch = e.changedTouches[i];
+                    if (touch.identifier === joystickTouchId) {
+                        let dx = touch.clientX - joystickCenter.x;
+                        let dy = touch.clientY - joystickCenter.y;
+                        const dist = Math.hypot(dx, dy);
+
+                        if (dist > maxRadius) {
+                            dx = (dx / dist) * maxRadius;
+                            dy = (dy / dist) * maxRadius;
+                        }
+
+                        joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+                        const normX = dx / maxRadius;
+                        const normY = dy / maxRadius;
+
+                        moveState.forward = normY < -0.2 ? Math.abs(normY) : 0;
+                        moveState.backward = normY > 0.2 ? normY : 0;
+                        moveState.left = normX < -0.2 ? Math.abs(normX) : 0;
+                        moveState.right = normX > 0.2 ? normX : 0;
+                        break;
+                    }
+                }
+            }, { passive: false });
+
+            const resetJoystick = (e) => {
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === joystickTouchId) {
+                        joystickTouchId = null;
+                        joystickKnob.style.transform = 'translate(0px, 0px)';
+                        moveState.forward = 0; moveState.backward = 0; moveState.left = 0; moveState.right = 0;
+                        break;
+                    }
+                }
+            };
+
+            window.addEventListener('touchend', resetJoystick);
+            window.addEventListener('touchcancel', resetJoystick);
+
+            let lookTouchId = null;
+            let lastLookPos = { x: 0, y: 0 };
+
+            touchLookZone.addEventListener('touchstart', (e) => {
+                const touch = e.changedTouches[0];
+                if (touch.clientX > window.innerWidth * 0.5 && touch.clientY > window.innerHeight - 300) {
+                    return;
+                }
+                if (lookTouchId !== null) return;
+                lookTouchId = touch.identifier;
+                lastLookPos = { x: touch.clientX, y: touch.clientY };
+            }, { passive: true });
+
+            touchLookZone.addEventListener('touchmove', (e) => {
+                if (lookTouchId === null) return;
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    const touch = e.changedTouches[i];
+                    if (touch.identifier === lookTouchId) {
+                        const dx = touch.clientX - lastLookPos.x;
+                        const dy = touch.clientY - lastLookPos.y;
+                        rotateCamera(dx * 0.005, dy * 0.005);
+                        lastLookPos = { x: touch.clientX, y: touch.clientY };
+                        break;
+                    }
+                }
+            }, { passive: true });
+
+            const resetLook = (e) => {
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === lookTouchId) {
+                        lookTouchId = null;
+                        break;
+                    }
+                }
+            };
+
+            touchLookZone.addEventListener('touchend', resetLook);
+            touchLookZone.addEventListener('touchcancel', resetLook);
+
+            const bindTouchAction = (id, action) => {
+                const btn = document.getElementById(id);
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    action(true);
+                }, { passive: false });
+                btn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    action(false);
+                }, { passive: false });
+            };
+
+            bindTouchAction('btn-touch-jump', (isDown) => { moveState.up = isDown ? 1 : 0; });
+            
+            document.getElementById('btn-touch-fly').addEventListener('touchstart', (e) => {
+                e.preventDefault(); e.stopPropagation(); toggleFly();
+            });
+            document.getElementById('btn-touch-mine').addEventListener('touchstart', (e) => {
+                e.preventDefault(); e.stopPropagation(); performPrimaryAction();
+            });
+            document.getElementById('btn-touch-place').addEventListener('touchstart', (e) => {
+                e.preventDefault(); e.stopPropagation(); performSecondaryAction();
+            });
+        }
+
+        function buildHotbarUI() {
+            const container = document.getElementById('hotbar');
+            container.innerHTML = '';
+
+            Object.values(BLOCK_TYPES).forEach(type => {
+                const slot = document.createElement('div');
+                slot.className = `hotbar-slot min-w-[36px] h-10 md:w-14 md:h-14 rounded-xl border-2 border-slate-600/60 bg-slate-800/80 flex flex-col items-center justify-between p-1 cursor-pointer select-none ${type.id === selectedBlockId ? 'active' : ''}`;
+                
+                slot.addEventListener('touchstart', (e) => {
+                    e.stopPropagation();
+                    selectedBlockId = type.id;
+                    updateHotbarUI();
+                }, { passive: true });
+
+                slot.onclick = (e) => {
+                    e.stopPropagation();
+                    selectedBlockId = type.id;
+                    updateHotbarUI();
+                };
+
+                const badge = document.createElement('span');
+                badge.className = 'text-[8px] md:text-[10px] font-bold text-slate-300 self-start leading-none';
+                badge.innerText = type.id === 10 ? '0' : type.id;
+
+                const preview = document.createElement('div');
+                preview.className = 'w-3.5 h-3.5 md:w-5 md:h-5 rounded border border-black/30 shadow-inner my-auto flex items-center justify-center text-[10px]';
+                preview.style.backgroundColor = type.color;
+                if (type.id === 10) preview.innerHTML = '🍎';
+
+                const label = document.createElement('span');
+                label.className = 'text-[8px] font-semibold text-slate-200 tracking-tighter truncate w-full text-center leading-none mt-0.5';
+                
+                const count = gameMode === 'survival' ? (inventory[type.id] || 0) : '∞';
+                label.innerText = `${type.name}(${count})`;
+
+                slot.appendChild(badge);
+                slot.appendChild(preview);
+                slot.appendChild(label);
+                container.appendChild(slot);
+            });
+        }
+
+        function updateHotbarUI() {
+            const slots = document.querySelectorAll('.hotbar-slot');
+            slots.forEach((slot, idx) => {
+                const typeId = idx + 1;
+                if (typeId === selectedBlockId) slot.classList.add('active');
+                else slot.classList.remove('active');
+
+                const label = slot.querySelector('span:last-child');
+                if (label && BLOCK_TYPES[typeId]) {
+                    const count = gameMode === 'survival' ? (inventory[typeId] || 0) : '∞';
+                    label.innerText = `${BLOCK_TYPES[typeId].name}(${count})`;
+                }
+            });
+        }
+
+        function updateHighlight() {
+            if (!isLocked) {
+                highlightBox.visible = false;
+                return;
+            }
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(Array.from(worldData.values()).map(b => b.mesh));
+
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const bPos = hit.object.userData;
+                highlightBox.position.set(bPos.x + 0.5, bPos.y + 0.5, bPos.z + 0.5);
+                highlightBox.visible = true;
+            } else {
+                highlightBox.visible = false;
+            }
+        }
+
+        function updatePlayerPhysics(delta) {
+            const moveVector = new THREE.Vector3();
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+
+            if (!isFlying) {
+                forward.y = 0;
+                right.y = 0;
+            }
+            forward.normalize();
+            right.normalize();
+
+            moveVector.addScaledVector(forward, moveState.forward - moveState.backward);
+            moveVector.addScaledVector(right, moveState.right - moveState.left);
+            if (moveVector.lengthSq() > 0) moveVector.normalize();
+
+            const speed = isFlying ? player.flySpeed : player.speed;
+
+            if (isFlying) {
+                velocity.x = moveVector.x * speed;
+                velocity.z = moveVector.z * speed;
+                velocity.y = (moveState.up - moveState.down) * speed;
+                camera.position.addScaledVector(velocity, delta);
+            } else {
+                velocity.x = moveVector.x * speed;
+                velocity.z = moveVector.z * speed;
+
+                if (!player.onGround && velocity.y < 0 && playerStats.lastFallY === 0) {
+                    playerStats.lastFallY = camera.position.y;
+                }
+
+                velocity.y -= 25.0 * delta;
+
+                if (moveState.up && player.onGround) {
+                    velocity.y = 8.5;
+                    player.onGround = false;
+                }
+
+                const nextX = camera.position.x + velocity.x * delta;
+                const nextZ = camera.position.z + velocity.z * delta;
+                const nextY = camera.position.y + velocity.y * delta;
+
+                // 修正：足元の床ブロック自身を壁判定から除外するため、チェック範囲を下から1ブロック分引き上げる
+                const footBlockY = Math.floor(nextY - player.height);
+                const checkYStart = footBlockY + 1;
+                const checkYEnd = Math.floor(nextY - 0.1);
+
+                let canMoveX = true;
+                let canMoveZ = true;
+
+                for (let y = checkYStart; y <= checkYEnd; y++) {
+                    if (worldData.has(`${Math.floor(nextX + (velocity.x > 0 ? player.radius : -player.radius))},${y},${Math.floor(camera.position.z)}`)) {
+                        canMoveX = false;
+                    }
+                    if (worldData.has(`${Math.floor(camera.position.x)},${y},${Math.floor(nextZ + (velocity.z > 0 ? player.radius : -player.radius))}`)) {
+                        canMoveZ = false;
+                    }
+                }
+
+                if (canMoveX) {
+                    camera.position.x = nextX;
+                } else {
+                    velocity.x = 0;
+                }
+
+                if (canMoveZ) {
+                    camera.position.z = nextZ;
+                } else {
+                    velocity.z = 0;
+                }
+
+                camera.position.y = nextY;
+
+                const px = Math.floor(camera.position.x);
+                const pz = Math.floor(camera.position.z);
+                let highestGround = 0;
+
+                const footCheckY = Math.floor(camera.position.y - player.height + 0.1);
+                for (let checkY = footCheckY; checkY >= 0; checkY--) {
+                    if (worldData.has(`${px},${checkY},${pz}`)) {
+                        highestGround = checkY + 1;
+                        break;
+                    }
+                }
+
+                const targetGroundY = highestGround + player.height;
+
+                if (camera.position.y <= targetGroundY) {
+                    if (playerStats.lastFallY > 0 && gameMode === 'survival') {
+                        const fallDistance = playerStats.lastFallY - camera.position.y;
+                        if (fallDistance > 4.5) {
+                            const dmg = Math.floor((fallDistance - 4) * 12);
+                            damagePlayer(dmg, '💥 落下ダメージ！');
+                        }
+                        playerStats.lastFallY = 0;
+                    }
+
+                    camera.position.y = targetGroundY;
+                    velocity.y = 0;
+                    player.onGround = true;
+                } else {
+                    player.onGround = false;
+                }
+            }
+
+            camera.position.x = Math.max(0.5, Math.min(WORLD_SIZE - 0.5, camera.position.x));
+            camera.position.z = Math.max(0.5, Math.min(WORLD_SIZE - 0.5, camera.position.z));
+            camera.position.y = Math.max(1.0, Math.min(WORLD_SIZE + 10, camera.position.y));
+        }
+
+        function updateSurvivalLogic(delta) {
+            if (gameMode !== 'survival' || !isLocked || isGameOver) return;
+
+            hungerTimer += delta;
+            if (hungerTimer >= 5.0) {
+                hungerTimer = 0;
+                playerStats.hunger = Math.max(0, playerStats.hunger - 2);
+                if (playerStats.hunger <= 0) damagePlayer(5, '🍗 空腹ダメージ！');
+                updateSurvivalHUD();
+            }
+
+            mobSpawnTimer += delta;
+            if (mobSpawnTimer >= 30.0) {
+                mobSpawnTimer = 0;
+                spawnZombie();
+            }
+        }
+
+        function updateHUDInfo() {
+            const pos = camera.position;
+            document.getElementById('pos-display').innerText = `X: ${pos.x.toFixed(1)}, Y: ${(pos.y - player.height).toFixed(1)}, Z: ${pos.z.toFixed(1)}`;
+
+            frameCount++;
+            const now = performance.now();
+            if (now - lastFpsTime >= 1000) {
+                currentFps = frameCount;
+                frameCount = 0;
+                lastFpsTime = now;
+                document.getElementById('fps-display').innerText = `FPS: ${currentFps} | ブロック: ${worldData.size}`;
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = performance.now();
+            const delta = Math.min((time - prevTime) / 1000, 0.1);
+            prevTime = time;
+
+            if (isLocked && !isGameOver) {
+                updatePlayerPhysics(delta);
+                updateMobs(delta);
+                updateDroppedItems(delta);
+                updateSurvivalLogic(delta);
+                updateArmAnimation(delta);
+                updateHighlight();
+            }
+
+            updateHUDInfo();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
