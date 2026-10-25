@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>インベーダーシューティング - RiO Special</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --panel: #111c2e;
+    --line: #2d4566;
+    --line-subtle: #192b45;
+    --text: #eef5ff;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent-glow: rgba(56, 189, 248, 0.4);
+    --success: #22c55e;
+    --warning: #eab308;
+    --danger: #ef4444;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, #070d18 0%, #0f1c30 100%);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Yu Gothic", sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  .wrap {
+    width: min(1180px, 96vw);
+    padding: 16px;
+  }
+  .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(20px, 3.5vw, 34px);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    letter-spacing: -0.02em;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 20px;
+  }
+  .game-panel, .side {
+    background: rgba(17, 28, 46, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  }
+  .game-panel {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .canvas-container {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid var(--line);
+    box-shadow: 0 0 25px rgba(0, 0, 0, 0.5);
+    background: #050b14;
+    width: 100%;
+    max-width: 600px;
+  }
+  #game {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 3 / 2;
+  }
+  .side {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .stats-group {
+    background: rgba(10, 18, 32, 0.7);
+    border: 1px solid var(--line-subtle);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px dashed var(--line-subtle);
+    padding-bottom: 6px;
+  }
+  .stat-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .label {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--accent);
+    font-family: monospace;
+  }
+  .help {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--muted);
+    background: rgba(10, 18, 32, 0.5);
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--line-subtle);
+  }
+  .btn {
+    width: 100%;
+    padding: 12px 16px;
+    border: 0;
+    border-radius: 10px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+    transition: all 0.15s ease;
+  }
+  .btn:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+  }
+  .btn:active {
+    transform: translateY(1px);
+  }
+  .btn.secondary {
+    background: #1e293b;
+    border: 1px solid var(--line);
+    color: var(--text);
+    box-shadow: none;
+  }
+  .msg {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-weight: 700;
+    color: #e2e8f0;
+    font-size: 13px;
+    background: rgba(15, 23, 42, 0.6);
+    border-radius: 8px;
+    padding: 8px;
+  }
+  .touch-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: auto;
+  }
+  .tbtn {
+    flex: 1;
+    min-height: 50px;
+    background: #1e293b;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
+    user-select: none;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+  }
+  .tbtn:active, .tbtn.pressed {
+    background: var(--accent);
+    color: #000;
+  }
+  .tbtn.accent {
+    background: #0284c7;
+    border-color: #38bdf8;
+  }
+
+  @media (max-width: 850px) {
+    .layout { grid-template-columns: 1fr; }
+    .side { display: flex; flex-direction: column; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="main-game-wrap">
+  <div class="top">
+    <h1>👾 RiO インベーダー</h1>
+    <div class="subtitle">「RiO」の文字インベーダーを撃ち落とせ！</div>
+  </div>
+
+  <div class="layout">
+    <div class="game-panel">
+      <div class="canvas-container">
+        <canvas id="game" width="900" height="600" aria-label="インベーダーシューティングゲームボード"></canvas>
+      </div>
+    </div>
+
+    <aside class="side">
+      <div class="stats-group">
+        <div class="stat-row">
+          <span class="label">SCORE</span>
+          <span class="value" id="score">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="label">LIVES</span>
+          <span class="value" id="lives">3</span>
+        </div>
+        <div class="stat-row">
+          <span class="label">STAGE</span>
+          <span class="value" id="stage">1 / 1</span>
+        </div>
+      </div>
+
+      <div class="help">
+        <strong>操作方法:</strong><br>
+        • 左右キー / A・D : 移動<br>
+        • スペースキー : ショット<br>
+        • 下部ボタン・ゲームパッド対応
+      </div>
+
+      <button class="btn" id="startBtn">▶ ゲームスタート</button>
+      <button class="btn secondary" id="resetBtn">↻ リセット</button>
+      <div class="msg" id="message">スタートボタンを押してください</div>
+
+      <div class="touch-controls" aria-label="スマホ用操作ボタン">
+        <button class="tbtn" id="tLeft">◀ ◀</button>
+        <button class="tbtn accent" id="tShoot">⚡ 射撃</button>
+        <button class="tbtn" id="tRight">▶ ▶</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- 宝箱オープン演出画面（threejs_walk_world_treasure_integrated.html にならう） -->
+<div id="prize-screen" aria-label="宝箱の賞品発表" style="display:none; position:fixed; inset:0; z-index:50;">
+  <main id="prize-scene-wrap" style="position:absolute; inset:0; z-index:1; background:radial-gradient(circle at center, #233529 0%, #101713 100%);" aria-label="宝箱オープン3D演出"></main>
+
+  <div class="ui-overlay" style="position:absolute; inset:0; z-index:2; pointer-events:none; display:flex; flex-direction:column; justify-content:space-between; align-items:center; padding:24px;">
+    <div class="header-title" style="background:rgba(22,32,29,0.85); border:2px solid #a9dc76; padding:10px 24px; border-radius:50px; font-size:clamp(18px,4vw,26px); font-weight:bold; color:#a9dc76; box-shadow:0 0 20px rgba(255,215,0,0.4); text-align:center; margin-top:10px;">🎉 地球防衛成功！ 宝箱発見！ 🎉</div>
+
+    <div class="prize-card" id="prize-card" style="pointer-events:auto; background:radial-gradient(circle, rgba(40,30,10,0.95) 0%, rgba(15,20,26,0.95) 100%); border:3px solid #a9dc76; border-radius:20px; padding:28px 36px; text-align:center; max-width:min(500px, 92vw); box-shadow:0 0 50px rgba(255,215,0,0.6); opacity:0; transform:translateY(40px) scale(0.85); transition:opacity 0.8s ease, transform 0.8s cubic-bezier(0.175,0.885,0.32,1.275);">
+      <div class="prize-subtitle" id="display-subtitle" style="font-size:clamp(14px,2.5vw,18px); color:#e2c076; margin-bottom:8px;">おめでとう！ しょうひんは・・・</div>
+      <div class="prize-name" id="display-title" style="font-size:clamp(24px,5vw,38px); font-weight:900; color:#fff; text-shadow:0 0 10px #ffea79, 0 0 20px #ff9800; margin:12px 0 16px; line-height:1.3;">🎁 インベーダー賞Get!! 🎁</div>
+      <div class="prize-desc" id="display-message" style="font-size:clamp(13px,2vw,15px); color:#a0b0a3;">おうちの人に この画面をみせてね！</div>
+    </div>
+
+    <div class="bottom-area" style="pointer-events:auto; display:flex; flex-direction:column; align-items:center; gap:12px; margin-bottom:10px; z-index:3;">
+      <div class="controls-bar" style="display:flex; gap:12px;">
+        <button class="action-btn secondary-btn" id="open-settings-btn" type="button" style="font:inherit; cursor:pointer; background:#293b30; color:#f2f5ed; border:1px solid #536657; border-radius:30px; padding:12px 22px; font-size:14px; font-weight:bold;">⚙️ 賞品の設定</button>
+        <button class="action-btn" id="replay-btn" type="button" style="font:inherit; cursor:pointer; background:linear-gradient(135deg, #ffd700, #ff9800); color:#000; font-weight:bold; border:none; border-radius:30px; padding:12px 22px; font-size:14px; box-shadow:0 4px 12px rgba(0,0,0,0.4);">🔄 もう一度みる</button>
+      </div>
+      <span class="back-link" id="back-to-game" style="font-size:13px; color:#b6c2b7; text-decoration:underline; cursor:pointer;">← ゲームに戻る / リトライ</span>
+    </div>
+  </div>
+
+  <!-- 大人用設定モーダル -->
+  <div class="settings-modal" id="settings-modal" style="position:absolute; inset:0; z-index:10; background:rgba(0,0,0,0.85); display:none; justify-content:center; align-items:center; padding:20px;">
+    <div class="settings-content" style="background:#1e2923; border:1px solid #4a6352; border-radius:16px; padding:24px; width:100%; max-width:420px; color:#f2f5ed;">
+      <h2 style="margin-top:0; font-size:18px; color:#a9dc76;">🎁 賞品内容の変更</h2>
+      <div class="form-group" style="margin-bottom:16px; text-align:left;">
+        <label for="input-subtitle" style="display:block; font-size:12px; margin-bottom:6px; color:#b6c2b7;">うえのメッセージ</label>
+        <input type="text" id="input-subtitle" value="おめでとう！ しょうひんは・・・" style="width:100%; padding:10px; border-radius:8px; border:1px solid #324239; background:#101713; color:#fff; font-family:inherit; font-size:14px;">
+      </div>
+      <div class="form-group" style="margin-bottom:16px; text-align:left;">
+        <label for="input-title" style="display:block; font-size:12px; margin-bottom:6px; color:#b6c2b7;">しょうひんのなまえ</label>
+        <input type="text" id="input-title" value="🎁 インベーダー賞Get!! 🎁" style="width:100%; padding:10px; border-radius:8px; border:1px solid #324239; background:#101713; color:#fff; font-family:inherit; font-size:14px;">
+      </div>
+      <div class="form-group" style="margin-bottom:16px; text-align:left;">
+        <label for="input-message" style="display:block; font-size:12px; margin-bottom:6px; color:#b6c2b7;">したのメッセージ</label>
+        <textarea id="input-message" rows="2" style="width:100%; padding:10px; border-radius:8px; border:1px solid #324239; background:#101713; color:#fff; font-family:inherit; font-size:14px;">おうちの人に この画面をみせてね！</textarea>
+      </div>
+      <div class="settings-actions" style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+        <button class="action-btn secondary-btn" id="cancel-settings" type="button" style="font:inherit; cursor:pointer; background:#293b30; color:#f2f5ed; border:1px solid #536657; border-radius:20px; padding:8px 16px;">キャンセル</button>
+        <button class="action-btn" id="save-settings" type="button" style="font:inherit; cursor:pointer; background:linear-gradient(135deg, #ffd700, #ff9800); color:#000; font-weight:bold; border:none; border-radius:20px; padding:8px 16px;">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Three.js Library -->
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js';
+
+// --- インベーダーゲームロジック ---
+(() => {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+
+  const scoreEl = document.getElementById("score");
+  const livesEl = document.getElementById("lives");
+  const stageEl = document.getElementById("stage");
+  const messageEl = document.getElementById("message");
+  const startBtn = document.getElementById("startBtn");
+  const resetBtn = document.getElementById("resetBtn");
+
+  const W = canvas.width, H = canvas.height;
+
+  let score = 0;
+  let lives = 3;
+  let running = false;
+  let gameOver = false;
+
+  const player = {
+    x: W / 2 - 20,
+    y: H - 50,
+    w: 40,
+    h: 24,
+    speed: 7,
+    cooldown: 0
+  };
+
+  let playerBullets = [];
+  let enemyBullets = [];
+  let enemies = [];
+  let particles = [];
+
+  let enemyDir = 1;
+  let enemySpeedX = 1.2;
+
+  const keys = { left: false, right: false, shoot: false };
+  let touchLeft = false;
+  let touchRight = false;
+  let touchShoot = false;
+
+  // 「RiO」の文字パターン（1:インベーダーあり, 0:なし）
+  const rioPattern = [
+    [1,1,1, 0, 1, 0, 1,1,1, 0],
+    [1,0,1, 0, 0, 0, 1,0,1, 0],
+    [1,1,0, 0, 1, 0, 1,0,1, 0],
+    [1,0,1, 0, 1, 0, 1,0,1, 0],
+    [1,0,1, 0, 1, 0, 1,1,1, 0]
+  ];
+
+  const rowColors = ["#ff4d4d", "#ffb52e", "#37c871", "#38bdf8", "#a855f7"];
+
+  function makeEnemies() {
+    enemies = [];
+    const rows = rioPattern.length;
+    const cols = rioPattern[0].length;
+    const ew = 36, eh = 24;
+    const gapX = 16, gapY = 14;
+    const startX = (W - (cols * (ew + gapX) - gapX)) / 2;
+    const startY = 60;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (rioPattern[r][c] === 1) {
+          enemies.push({
+            x: startX + c * (ew + gapX),
+            y: startY + r * (eh + gapY),
+            w: ew,
+            h: eh,
+            alive: true,
+            color: rowColors[r % rowColors.length],
+            score: (rows - r) * 10
+          });
+        }
+      }
+    }
+    enemyDir = 1;
+    enemySpeedX = 1.2;
+  }
+
+  function createExplosion(x, y, color, count = 12) {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 4 + 1;
+      particles.push({
+        x: x, y: y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 20 + Math.random() * 15,
+        maxLife: 35,
+        color: color
+      });
+    }
+  }
+
+  function resetGame() {
+    score = 0; lives = 3; gameOver = false; running = false;
+    player.x = W / 2 - player.w / 2;
+    playerBullets = []; enemyBullets = []; particles = [];
+    makeEnemies();
+    updateUI();
+    messageEl.textContent = "スタートボタンを押してください";
+    startBtn.textContent = "▶ ゲームスタート";
+  }
+
+  function startGame() {
+    if (gameOver) resetGame();
+    running = true;
+    messageEl.textContent = "撃退中！";
+    startBtn.textContent = "⏸ 一時停止";
+  }
+
+  function pauseGame() {
+    running = false;
+    messageEl.textContent = "一時停止中";
+    startBtn.textContent = "▶ 再開";
+  }
+
+  function updateUI() {
+    scoreEl.textContent = score;
+    livesEl.textContent = lives;
+    stageEl.textContent = "1 / 1";
+  }
+
+  function stageClear() {
+    running = false;
+    gameOver = true;
+    messageEl.textContent = "🎉 クリア！";
+    showTreasurePrize();
+  }
+
+  function shootBullet() {
+    if (player.cooldown <= 0) {
+      playerBullets.push({
+        x: player.x + player.w / 2,
+        y: player.y,
+        r: 3,
+        vy: -9
+      });
+      player.cooldown = 14;
+    }
+  }
+
+  function getGamepadInput() {
+    if (!navigator.getGamepads) return { x: 0, shoot: false };
+    const pads = navigator.getGamepads();
+    let gp = Array.from(pads).find(p => p && p.connected) || null;
+    if (!gp) return { x: 0, shoot: false };
+    let x = Math.abs(gp.axes[0] || 0) > 0.18 ? gp.axes[0] : 0;
+    if (gp.buttons[14] && gp.buttons[14].pressed) x = -1;
+    if (gp.buttons[15] && gp.buttons[15].pressed) x = 1;
+    const shoot = !!(gp.buttons[0] && gp.buttons[0].pressed) || !!(gp.buttons[7] && gp.buttons[7].pressed);
+    return { x, shoot };
+  }
+
+  function update() {
+    if (!running) return;
+
+    if (player.cooldown > 0) player.cooldown--;
+
+    const gp = getGamepadInput();
+    if (keys.left || touchLeft || gp.x < -0.2) player.x -= player.speed;
+    if (keys.right || touchRight || gp.x > 0.2) player.x += player.speed;
+    player.x = Math.max(0, Math.min(W - player.w, player.x));
+
+    if (keys.shoot || touchShoot || gp.shoot) {
+      shootBullet();
+    }
+
+    for (let i = playerBullets.length - 1; i >= 0; i--) {
+      const b = playerBullets[i];
+      b.y += b.vy;
+      if (b.y < -10) playerBullets.splice(i, 1);
+    }
+
+    for (let i = enemyBullets.length - 1; i >= 0; i--) {
+      const eb = enemyBullets[i];
+      eb.y += eb.vy;
+
+      if (
+        eb.x > player.x && eb.x < player.x + player.w &&
+        eb.y > player.y && eb.y < player.y + player.h
+      ) {
+        createExplosion(player.x + player.w / 2, player.y + player.h / 2, "#38bdf8", 20);
+        enemyBullets.splice(i, 1);
+        lives--;
+        updateUI();
+
+        if (lives <= 0) {
+          running = false; gameOver = true;
+          messageEl.textContent = "ゲームオーバー！";
+          startBtn.textContent = "▶ もう一度";
+        } else {
+          messageEl.textContent = `被弾！ 残り ${lives} 機！`;
+        }
+        continue;
+      }
+
+      if (eb.y > H + 10) enemyBullets.splice(i, 1);
+    }
+
+    const activeEnemies = enemies.filter(e => e.alive);
+    if (activeEnemies.length === 0) {
+      stageClear();
+      return;
+    }
+
+    let hitWall = false;
+    const currentSpeed = enemySpeedX * (1 + (1 - activeEnemies.length / enemies.length) * 0.7);
+
+    for (const e of activeEnemies) {
+      if ((enemyDir > 0 && e.x + e.w >= W - 15) || (enemyDir < 0 && e.x <= 15)) {
+        hitWall = true;
+      }
+    }
+
+    if (hitWall) {
+      enemyDir *= -1;
+      for (const e of activeEnemies) {
+        e.y += 14;
+        if (e.y + e.h >= player.y) {
+          running = false; gameOver = true;
+          messageEl.textContent = "防衛ライン突破！ GAME OVER";
+          startBtn.textContent = "▶ もう一度";
+          return;
+        }
+      }
+    } else {
+      for (const e of activeEnemies) {
+        e.x += enemyDir * currentSpeed;
+      }
+    }
+
+    if (Math.random() < 0.03) {
+      const randomEnemy = activeEnemies[Math.floor(Math.random() * activeEnemies.length)];
+      enemyBullets.push({
+        x: randomEnemy.x + randomEnemy.w / 2,
+        y: randomEnemy.y + randomEnemy.h,
+        r: 3,
+        vy: 5
+      });
+    }
+
+    for (let i = playerBullets.length - 1; i >= 0; i--) {
+      const pb = playerBullets[i];
+      let hit = false;
+      for (const e of activeEnemies) {
+        if (
+          pb.x >= e.x && pb.x <= e.x + e.w &&
+          pb.y >= e.y && pb.y <= e.y + e.h
+        ) {
+          e.alive = false;
+          createExplosion(e.x + e.w / 2, e.y + e.h / 2, e.color, 12);
+          score += e.score;
+          updateUI();
+          hit = true;
+          break;
+        }
+      }
+      if (hit) {
+        playerBullets.splice(i, 1);
+      }
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life--;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.05)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+    ctx.strokeStyle = "rgba(239, 68, 68, 0.3)";
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(0, player.y - 10);
+    ctx.lineTo(W, player.y - 10);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (!gameOver || lives > 0) {
+      ctx.fillStyle = "#38bdf8";
+      ctx.fillRect(player.x, player.y + 10, player.w, player.h - 10);
+      ctx.fillRect(player.x + player.w / 2 - 4, player.y, 8, 10);
+      ctx.fillStyle = "#bae6fd";
+      ctx.fillRect(player.x + 4, player.y + 12, player.w - 8, 4);
+    }
+
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      ctx.fillStyle = e.color;
+      ctx.fillRect(e.x, e.y + 4, e.w, e.h - 8);
+      ctx.fillRect(e.x + 4, e.y, e.w - 8, e.h);
+      ctx.fillStyle = "#07111f";
+      ctx.fillRect(e.x + 8, e.y + 6, 6, 6);
+      ctx.fillRect(e.x + e.w - 14, e.y + 6, 6, 6);
+    }
+
+    ctx.fillStyle = "#38bdf8";
+    ctx.shadowColor = "#38bdf8";
+    ctx.shadowBlur = 8;
+    for (const b of playerBullets) {
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = "#ef4444";
+    ctx.shadowColor = "#ef4444";
+    ctx.shadowBlur = 8;
+    for (const eb of enemyBullets) {
+      ctx.beginPath();
+      ctx.arc(eb.x, eb.y, eb.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+
+    for (const p of particles) {
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = p.life / p.maxLife;
+      ctx.fillRect(p.x, p.y, 3, 3);
+    }
+    ctx.globalAlpha = 1.0;
+  }
+
+  function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft" || e.key === "a") { keys.left = true; e.preventDefault(); }
+    if (e.key === "ArrowRight" || e.key === "d") { keys.right = true; e.preventDefault(); }
+    if (e.code === "Space") {
+      keys.shoot = true;
+      e.preventDefault();
+      if (!running && !gameOver) startGame();
+    }
+  });
+
+  window.addEventListener("keyup", (e) => {
+    if (e.key === "ArrowLeft" || e.key === "a") keys.left = false;
+    if (e.key === "ArrowRight" || e.key === "d") keys.right = false;
+    if (e.code === "Space") keys.shoot = false;
+  });
+
+  // スマホ用ボタンのバインド
+  const btnLeft = document.getElementById("tLeft");
+  const btnRight = document.getElementById("tRight");
+  const btnShoot = document.getElementById("tShoot");
+
+  btnLeft.addEventListener("pointerdown", () => { touchLeft = true; btnLeft.classList.add("pressed"); });
+  btnLeft.addEventListener("pointerup", () => { touchLeft = false; btnLeft.classList.remove("pressed"); });
+  btnLeft.addEventListener("pointercancel", () => { touchLeft = false; btnLeft.classList.remove("pressed"); });
+
+  btnRight.addEventListener("pointerdown", () => { touchRight = true; btnRight.classList.add("pressed"); });
+  btnRight.addEventListener("pointerup", () => { touchRight = false; btnRight.classList.remove("pressed"); });
+  btnRight.addEventListener("pointercancel", () => { touchRight = false; btnRight.classList.remove("pressed"); });
+
+  btnShoot.addEventListener("pointerdown", () => { touchShoot = true; btnShoot.classList.add("pressed"); shootBullet(); });
+  btnShoot.addEventListener("pointerup", () => { touchShoot = false; btnShoot.classList.remove("pressed"); });
+  btnShoot.addEventListener("pointercancel", () => { touchShoot = false; btnShoot.classList.remove("pressed"); });
+
+  startBtn.addEventListener("click", () => {
+    if (running) pauseGame(); else startGame();
+  });
+  resetBtn.addEventListener("click", resetGame);
+
+  resetGame();
+  loop();
+})();
+
+
+// --- 宝箱オープン3D演出 (threejs_walk_world_treasure_integrated.html にならう) ---
+function showTreasurePrize() {
+  document.getElementById('prize-screen').style.display = 'block';
+  document.getElementById('main-game-wrap').style.visibility = 'hidden';
+  startPrizeScene();
+}
+
+function closeTreasurePrize() {
+  document.getElementById('prize-screen').style.display = 'none';
+  document.getElementById('main-game-wrap').style.visibility = '';
+}
+
+function startPrizeScene() {
+  const wrap = document.getElementById('prize-scene-wrap');
+  wrap.innerHTML = '';
+  const prizeCard = document.getElementById('prize-card');
+  prizeCard.classList.remove('visible');
+
+  let savedSubtitle = null, savedTitle = null, savedMessage = null;
+  try {
+    savedSubtitle = localStorage.getItem('treasure_subtitle');
+    savedTitle = localStorage.getItem('treasure_title');
+    savedMessage = localStorage.getItem('treasure_message');
+  } catch (_) {}
+
+  if (savedSubtitle) document.getElementById('display-subtitle').textContent = savedSubtitle;
+  if (savedTitle) document.getElementById('display-title').textContent = savedTitle;
+  if (savedMessage) document.getElementById('display-message').textContent = savedMessage;
+
+  try {
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x101713, 20, 50);
+
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+    camera.position.set(0, 0.8, 12);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    wrap.appendChild(renderer.domElement);
+
+    const ambient = new THREE.AmbientLight(0xfff5dc, 1.5);
+    scene.add(ambient);
+    const dirLight = new THREE.DirectionalLight(0xffea9f, 2.5);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
+
+    const treasureGroup = new THREE.Group();
+    scene.add(treasureGroup);
+
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x875027, roughness: 0.8 });
+    const lidMat = new THREE.MeshStandardMaterial({ color: 0xa9662e, roughness: 0.7 });
+    const goldMat = new THREE.MeshStandardMaterial({ color: 0xe5bd4e, metalness: 0.5, roughness: 0.3 });
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 1.5), woodMat);
+    body.position.y = -0.6;
+    treasureGroup.add(body);
+
+    const lidGroup = new THREE.Group();
+    lidGroup.position.set(0, 0, -0.75);
+    treasureGroup.add(lidGroup);
+
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.4, 1.6), lidMat);
+    lid.position.set(0, 0.2, 0.75);
+    lidGroup.add(lid);
+
+    const lock = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.1), goldMat);
+    lock.position.set(0, -0.1, 0.8);
+    lidGroup.add(lock);
+
+    const lightBeamGeo = new THREE.ConeGeometry(1.8, 4, 16, 1, true);
+    const lightBeamMat = new THREE.MeshBasicMaterial({ color: 0xffdf6d, transparent: true, opacity: 0.35, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+    const lightBeam = new THREE.Mesh(lightBeamGeo, lightBeamMat);
+    lightBeam.position.set(0, 2, 0);
+    treasureGroup.add(lightBeam);
+
+    const particleCount = 120;
+    const particleGeo = new THREE.BufferGeometry();
+    const particlePositions = new Float32Array(particleCount * 3);
+    const particleSpeeds = [];
+
+    for (let i = 0; i < particleCount; i++) {
+      particlePositions[i * 3] = (Math.random() - 0.5) * 3;
+      particlePositions[i * 3 + 1] = Math.random() * 2;
+      particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 3;
+      particleSpeeds.push({
+        x: (Math.random() - 0.5) * 0.02,
+        y: 0.02 + Math.random() * 0.04,
+        z: (Math.random() - 0.5) * 0.02
+      });
+    }
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    const particleMat = new THREE.PointsMaterial({ color: 0xffcc00, size: 0.12, transparent: true, opacity: 0.9 });
+    const particles = new THREE.Points(particleGeo, particleMat);
+    scene.add(particles);
+
+    function resize() {
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let clock = new THREE.Clock();
+    let animationStage = 0;
+
+    setTimeout(() => {
+      animationStage = 1;
+      setTimeout(() => {
+        prizeCard.classList.add('visible');
+      }, 600);
+    }, 400);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+      const elapsedTime = clock.getElapsedTime();
+
+      if (animationStage === 1) {
+        if (lidGroup.rotation.x > -Math.PI * 0.65) {
+          lidGroup.rotation.x -= dt * 3.5;
+        } else {
+          animationStage = 2;
+        }
+      }
+
+      treasureGroup.position.y = Math.sin(elapsedTime * 2) * 0.1;
+      treasureGroup.rotation.y = Math.sin(elapsedTime * 0.8) * 0.15;
+      lightBeam.material.opacity = 0.25 + Math.sin(elapsedTime * 5) * 0.15;
+
+      const posArr = particleGeo.attributes.position.array;
+      for (let i = 0; i < particleCount; i++) {
+        posArr[i * 3 + 1] += particleSpeeds[i].y;
+        posArr[i * 3] += particleSpeeds[i].x;
+        posArr[i * 3 + 2] += particleSpeeds[i].z;
+        if (posArr[i * 3 + 1] > 5) {
+          posArr[i * 3 + 1] = 0;
+          posArr[i * 3] = (Math.random() - 0.5) * 1.5;
+          posArr[i * 3 + 2] = (Math.random() - 0.5) * 1.5;
+        }
+      }
+      particleGeo.attributes.position.needsUpdate = true;
+
+      renderer.render(scene, camera);
+    }
+    animate();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+document.getElementById('replay-btn').addEventListener('click', startPrizeScene);
+document.getElementById('back-to-game').addEventListener('click', closeTreasurePrize);
+
+const modal = document.getElementById('settings-modal');
+document.getElementById('open-settings-btn').addEventListener('click', () => modal.style.display = 'flex');
+document.getElementById('cancel-settings').addEventListener('click', () => modal.style.display = 'none');
+document.getElementById('save-settings').addEventListener('click', () => {
+  const sub = document.getElementById('input-subtitle').value;
+  const tit = document.getElementById('input-title').value;
+  const msg = document.getElementById('input-message').value;
+  try {
+    localStorage.setItem('treasure_subtitle', sub);
+    localStorage.setItem('treasure_title', tit);
+    localStorage.setItem('treasure_message', msg);
+  } catch (_) {}
+  document.getElementById('display-subtitle').textContent = sub;
+  document.getElementById('display-title').textContent = tit;
+  document.getElementById('display-message').textContent = msg;
+  modal.style.display = 'none';
+  alert('賞品の内容を更新しました！');
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,967 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ドットイーター - RiO Special</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --panel: #111c2e;
+    --line: #2d4566;
+    --line-subtle: #192b45;
+    --text: #eef5ff;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent-glow: rgba(56, 189, 248, 0.4);
+    --success: #22c55e;
+    --warning: #eab308;
+    --danger: #ef4444;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, #070d18 0%, #0f1c30 100%);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Yu Gothic", sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  .wrap {
+    width: min(1180px, 96vw);
+    padding: 16px;
+  }
+  .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(20px, 3.5vw, 34px);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    letter-spacing: -0.02em;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 20px;
+  }
+  .game-panel, .side {
+    background: rgba(17, 28, 46, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  }
+  .game-panel {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .canvas-container {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid var(--line);
+    box-shadow: 0 0 25px rgba(0, 0, 0, 0.5);
+    background: #050b14;
+    width: 100%;
+    max-width: 600px;
+  }
+  #game {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+  }
+  .side {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .stats-group {
+    background: rgba(10, 18, 32, 0.7);
+    border: 1px solid var(--line-subtle);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px dashed var(--line-subtle);
+    padding-bottom: 6px;
+  }
+  .stat-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .label {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--accent);
+    font-family: monospace;
+  }
+  .help {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--muted);
+    background: rgba(10, 18, 32, 0.5);
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--line-subtle);
+  }
+  .btn {
+    width: 100%;
+    padding: 12px 16px;
+    border: 0;
+    border-radius: 10px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+    transition: all 0.15s ease;
+  }
+  .btn:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+  }
+  .btn:active {
+    transform: translateY(1px);
+  }
+  .btn.secondary {
+    background: #1e293b;
+    border: 1px solid var(--line);
+    color: var(--text);
+    box-shadow: none;
+  }
+  .msg {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-weight: 700;
+    color: #e2e8f0;
+    font-size: 13px;
+    background: rgba(15, 23, 42, 0.6);
+    border-radius: 8px;
+    padding: 8px;
+  }
+
+  /* タッチ操作用 D-Pad */
+  .dpad-container {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 46px);
+    grid-template-rows: repeat(3, 46px);
+    gap: 4px;
+    justify-content: center;
+  }
+  .dbtn {
+    background: #1e293b;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
+    user-select: none;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+  }
+  .dbtn:active, .dbtn.pressed { background: var(--accent); color: #000; }
+  .dbtn.up { grid-column: 2; grid-row: 1; }
+  .dbtn.left { grid-column: 1; grid-row: 2; }
+  .dbtn.right { grid-column: 3; grid-row: 2; }
+  .dbtn.down { grid-column: 2; grid-row: 3; }
+
+  @media (max-width: 850px) {
+    .layout { grid-template-columns: 1fr; }
+    .side { display: flex; flex-direction: column; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="main-game-wrap">
+  <div class="top">
+    <h1>🟡 RiO ドットイーター</h1>
+    <div class="subtitle">「RiO」の文字の餌をすべて食べ尽くそう！</div>
+  </div>
+
+  <div class="layout">
+    <div class="game-panel">
+      <div class="canvas-container">
+        <canvas id="game" width="600" height="600" aria-label="ドットイーターゲームボード"></canvas>
+      </div>
+    </div>
+
+    <aside class="side">
+      <div class="stats-group">
+        <div class="stat-row">
+          <span class="label">SCORE</span>
+          <span class="value" id="score">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="label">LIVES</span>
+          <span class="value" id="lives">3</span>
+        </div>
+        <div class="stat-row">
+          <span class="label">STAGE</span>
+          <span class="value" id="stage">1 / 1</span>
+        </div>
+      </div>
+
+      <div class="help">
+        <strong>操作方法:</strong><br>
+        • 矢印キー / WASD : 移動<br>
+        • 画面下部 D-Pad / ゲームパッド対応<br>
+        • パワーペレットでゴースト撃破！
+      </div>
+
+      <button class="btn" id="startBtn">▶ ゲームスタート</button>
+      <button class="btn secondary" id="resetBtn">↻ リセット</button>
+      <div class="msg" id="message">スタートボタンを押してください</div>
+
+      <div class="dpad-container" aria-label="スマホ用方向キー">
+        <div class="dpad">
+          <button class="dbtn up" id="btnUp">▲</button>
+          <button class="dbtn left" id="btnLeft">◄</button>
+          <button class="dbtn right" id="btnRight">►</button>
+          <button class="dbtn down" id="btnDown">▼</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- 宝箱オープン演出画面（threejs_walk_world_treasure_integrated.html / invader.html にならう） -->
+<div id="prize-screen" aria-label="宝箱の賞品発表" style="display:none; position:fixed; inset:0; z-index:50;">
+  <main id="prize-scene-wrap" style="position:absolute; inset:0; z-index:1; background:radial-gradient(circle at center, #233529 0%, #101713 100%);" aria-label="宝箱オープン3D演出"></main>
+
+  <div class="ui-overlay" style="position:absolute; inset:0; z-index:2; pointer-events:none; display:flex; flex-direction:column; justify-content:space-between; align-items:center; padding:24px;">
+    <div class="header-title" style="background:rgba(22,32,29,0.85); border:2px solid #a9dc76; padding:10px 24px; border-radius:50px; font-size:clamp(18px,4vw,26px); font-weight:bold; color:#a9dc76; box-shadow:0 0 20px rgba(255,215,0,0.4); text-align:center; margin-top:10px;">🎉 クリア！ 宝箱発見！ 🎉</div>
+
+    <div class="prize-card" id="prize-card" style="pointer-events:auto; background:radial-gradient(circle, rgba(40,30,10,0.95) 0%, rgba(15,20,26,0.95) 100%); border:3px solid #a9dc76; border-radius:20px; padding:28px 36px; text-align:center; max-width:min(500px, 92vw); box-shadow:0 0 50px rgba(255,215,0,0.6); opacity:0; transform:translateY(40px) scale(0.85); transition:opacity 0.8s ease, transform 0.8s cubic-bezier(0.175,0.885,0.32,1.275);">
+      <div class="prize-subtitle" id="display-subtitle" style="font-size:clamp(14px,2.5vw,18px); color:#e2c076; margin-bottom:8px;">おめでとう！ しょうひんは・・・</div>
+      <div class="prize-name" id="display-title" style="font-size:clamp(24px,5vw,38px); font-weight:900; color:#fff; text-shadow:0 0 10px #ffea79, 0 0 20px #ff9800; margin:12px 0 16px; line-height:1.3;">🎁 ドットイーター賞Get!! 🎁</div>
+      <div class="prize-desc" id="display-message" style="font-size:clamp(13px,2vw,15px); color:#a0b0a3;">おうちの人に この画面をみせてね！</div>
+    </div>
+
+    <div class="bottom-area" style="pointer-events:auto; display:flex; flex-direction:column; align-items:center; gap:12px; margin-bottom:10px; z-index:3;">
+      <div class="controls-bar" style="display:flex; gap:12px;">
+        <button class="action-btn secondary-btn" id="open-settings-btn" type="button" style="font:inherit; cursor:pointer; background:#293b30; color:#f2f5ed; border:1px solid #536657; border-radius:30px; padding:12px 22px; font-size:14px; font-weight:bold;">⚙️ 賞品の設定</button>
+        <button class="action-btn" id="replay-btn" type="button" style="font:inherit; cursor:pointer; background:linear-gradient(135deg, #ffd700, #ff9800); color:#000; font-weight:bold; border:none; border-radius:30px; padding:12px 22px; font-size:14px; box-shadow:0 4px 12px rgba(0,0,0,0.4);">🔄 もう一度みる</button>
+      </div>
+      <span class="back-link" id="back-to-game" style="font-size:13px; color:#b6c2b7; text-decoration:underline; cursor:pointer;">← ゲームに戻る / リトライ</span>
+    </div>
+  </div>
+
+  <!-- 大人用設定モーダル -->
+  <div class="settings-modal" id="settings-modal" style="position:absolute; inset:0; z-index:10; background:rgba(0,0,0,0.85); display:none; justify-content:center; align-items:center; padding:20px;">
+    <div class="settings-content" style="background:#1e2923; border:1px solid #4a6352; border-radius:16px; padding:24px; width:100%; max-width:420px; color:#f2f5ed;">
+      <h2 style="margin-top:0; font-size:18px; color:#a9dc76;">🎁 賞品内容の変更</h2>
+      <div class="form-group" style="margin-bottom:16px; text-align:left;">
+        <label for="input-subtitle" style="display:block; font-size:12px; margin-bottom:6px; color:#b6c2b7;">うえのメッセージ</label>
+        <input type="text" id="input-subtitle" value="おめでとう！ しょうひんは・・・" style="width:100%; padding:10px; border-radius:8px; border:1px solid #324239; background:#101713; color:#fff; font-family:inherit; font-size:14px;">
+      </div>
+      <div class="form-group" style="margin-bottom:16px; text-align:left;">
+        <label for="input-title" style="display:block; font-size:12px; margin-bottom:6px; color:#b6c2b7;">しょうひんのなまえ</label>
+        <input type="text" id="input-title" value="🎁 ドットイーター賞Get!! 🎁" style="width:100%; padding:10px; border-radius:8px; border:1px solid #324239; background:#101713; color:#fff; font-family:inherit; font-size:14px;">
+      </div>
+      <div class="form-group" style="margin-bottom:16px; text-align:left;">
+        <label for="input-message" style="display:block; font-size:12px; margin-bottom:6px; color:#b6c2b7;">したのメッセージ</label>
+        <textarea id="input-message" rows="2" style="width:100%; padding:10px; border-radius:8px; border:1px solid #324239; background:#101713; color:#fff; font-family:inherit; font-size:14px;">おうちの人に この画面をみせてね！</textarea>
+      </div>
+      <div class="settings-actions" style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+        <button class="action-btn secondary-btn" id="cancel-settings" type="button" style="font:inherit; cursor:pointer; background:#293b30; color:#f2f5ed; border:1px solid #536657; border-radius:20px; padding:8px 16px;">キャンセル</button>
+        <button class="action-btn" id="save-settings" type="button" style="font:inherit; cursor:pointer; background:linear-gradient(135deg, #ffd700, #ff9800); color:#000; font-weight:bold; border:none; border-radius:20px; padding:8px 16px;">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Three.js Library -->
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js';
+
+// --- ドットイーターゲームロジック ---
+(() => {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+
+  const scoreEl = document.getElementById("score");
+  const livesEl = document.getElementById("lives");
+  const stageEl = document.getElementById("stage");
+  const messageEl = document.getElementById("message");
+  const startBtn = document.getElementById("startBtn");
+  const resetBtn = document.getElementById("resetBtn");
+
+  const COLS = 20, ROWS = 20;
+  const TILE = 30; // 600 / 20
+
+  // 「RiO」の文字パターン（1:ドットあり, 0:なし）
+  const rioPattern = [
+    [1,1,1, 0, 1, 0, 1,1,1],
+    [1,0,1, 0, 0, 0, 1,0,1],
+    [1,1,0, 0, 1, 0, 1,0,1],
+    [1,0,1, 0, 1, 0, 1,0,1],
+    [1,0,1, 0, 1, 0, 1,1,1]
+  ];
+
+  // シンプルな迷路マップテンプレート（1=壁, 0=通路）
+  const mapTemplate = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,1],
+    [1,0,1,1,0,0,1,0,1,1,1,1,0,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,0,1],
+    [1,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,1],
+    [1,1,1,1,0,1,0,1,1,0,0,1,1,0,1,0,1,1,1,1],
+    [1,1,1,1,0,1,0,0,0,0,0,0,0,0,1,0,1,1,1,1],
+    [1,1,1,1,0,1,0,1,1,0,0,1,1,0,1,0,1,1,1,1],
+    [1,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,1],
+    [1,0,1,1,0,1,0,1,1,1,1,1,1,0,1,0,1,1,0,1],
+    [1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1],
+    [1,1,0,1,0,1,0,1,1,1,1,1,1,0,1,0,1,0,1,1],
+    [1,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,1],
+    [1,0,1,1,1,1,1,1,0,1,1,0,1,1,1,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,0,1,1,1,0,1,1,0,1,1,0,1,1,1,0,1],
+    [1,0,1,1,0,1,1,1,0,1,1,0,1,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+  ];
+
+  let map = [];
+  let score = 0;
+  let lives = 3;
+  let running = false;
+  let gameOver = false;
+  let totalDots = 0;
+  let eatenDots = 0;
+  let frightTimer = 0;
+  let ghostCombo = 0;
+  let frameCount = 0;
+
+  const DIRS = {
+    up:    { x: 0, y: -1, angle: Math.PI * 1.5 },
+    down:  { x: 0, y: 1,  angle: Math.PI * 0.5 },
+    left:  { x: -1, y: 0, angle: Math.PI },
+    right: { x: 1, y: 0,  angle: 0 }
+  };
+
+  const player = {
+    x: 9 * TILE,
+    y: 15 * TILE,
+    speed: 2.5,
+    dir: DIRS.right,
+    nextDir: DIRS.right,
+    mouthAngle: 0.2
+  };
+
+  // ゴーストの初期位置を4隅（左上、右上、左下、右下）に分散配置
+  const ghostDefs = [
+    { name: "アカベエ", color: "#ef4444", homeX: 1, homeY: 1, speed: 2.0 },
+    { name: "ピンキー", color: "#ec4899", homeX: COLS - 2, homeY: 1, speed: 2.0 },
+    { name: "アオスケ", color: "#38bdf8", homeX: 1, homeY: ROWS - 2, speed: 2.0 },
+    { name: "グズタ",   color: "#f59e0b", homeX: COLS - 2, homeY: ROWS - 2, speed: 2.0 }
+  ];
+
+  let ghosts = [];
+
+  function initMap() {
+    map = Array.from({ length: ROWS }, () => Array(COLS).fill(1));
+    for (let r = 0; r < mapTemplate.length && r < ROWS; r++) {
+      for (let c = 0; c < mapTemplate[r].length && c < COLS; c++) {
+        map[r][c] = mapTemplate[r][c];
+      }
+    }
+
+    totalDots = 0;
+    eatenDots = 0;
+    const startRow = 6;
+    const startCol = 5;
+
+    for (let r = 0; r < rioPattern.length; r++) {
+      for (let c = 0; c < rioPattern[r].length; c++) {
+        if (rioPattern[r][c] === 1) {
+          const mr = startRow + r;
+          const mc = startCol + c;
+          map[mr][mc] = 2; // ドット
+          totalDots++;
+        }
+      }
+    }
+
+    const powerSpots = [[1,1], [1,COLS-2], [ROWS-2,1], [ROWS-2,COLS-2]];
+    powerSpots.forEach(([pr, pc]) => {
+      if (map[pr][pc] === 0) {
+        map[pr][pc] = 3;
+        totalDots++;
+      }
+    });
+  }
+
+  function resetPositions() {
+    player.x = 9 * TILE;
+    player.y = 15 * TILE;
+    player.dir = DIRS.right;
+    player.nextDir = DIRS.right;
+
+    ghosts = ghostDefs.map((def, i) => ({
+      ...def,
+      x: def.homeX * TILE,
+      y: def.homeY * TILE,
+      dir: DIRS.up,
+      frightened: false,
+      eaten: false
+    }));
+    frightTimer = 0;
+  }
+
+  function resetGame() {
+    score = 0; lives = 3; gameOver = false; running = false;
+    initMap();
+    resetPositions();
+    updateUI();
+    messageEl.textContent = "スタートボタンを押してください";
+    startBtn.textContent = "▶ ゲームスタート";
+  }
+
+  function startGame() {
+    if (gameOver) resetGame();
+    running = true;
+    messageEl.textContent = "「RiO」のドットを食べ尽くそう！";
+    startBtn.textContent = "⏸ 一時停止";
+  }
+
+  function pauseGame() {
+    running = false;
+    messageEl.textContent = "一時停止中";
+    startBtn.textContent = "▶ 再開";
+  }
+
+  function updateUI() {
+    scoreEl.textContent = score;
+    livesEl.textContent = lives;
+    stageEl.textContent = "1 / 1";
+  }
+
+  function canMove(x, y, dir) {
+    if (x % TILE !== 0 || y % TILE !== 0) return true;
+    const gx = Math.round(x / TILE) + dir.x;
+    const gy = Math.round(y / TILE) + dir.y;
+    if (gx < 0 || gx >= COLS || gy < 0 || gy >= ROWS) return false;
+    return map[gy][gx] !== 1;
+  }
+
+  function updatePlayer() {
+    if (player.x % TILE === 0 && player.y % TILE === 0) {
+      const gx = player.x / TILE;
+      const gy = player.y / TILE;
+
+      if (map[gy] && (map[gy][gx] === 2 || map[gy][gx] === 3)) {
+        const isPower = map[gy][gx] === 3;
+        map[gy][gx] = 0;
+        score += isPower ? 50 : 10;
+        eatenDots++;
+        updateUI();
+
+        if (isPower) {
+          frightTimer = 350;
+          ghostCombo = 0;
+          ghosts.forEach(g => { if (!g.eaten) g.frightened = true; });
+        }
+      }
+
+      if (canMove(player.x, player.y, player.nextDir)) {
+        player.dir = player.nextDir;
+      }
+    }
+
+    if (canMove(player.x, player.y, player.dir)) {
+      player.x += player.dir.x * player.speed;
+      player.y += player.dir.y * player.speed;
+    }
+
+    player.mouthAngle = Math.abs(Math.sin(frameCount * 0.2)) * 0.35 + 0.05;
+  }
+
+  function updateGhosts() {
+    if (frightTimer > 0) {
+      frightTimer--;
+      if (frightTimer === 0) {
+        ghosts.forEach(g => g.frightened = false);
+      }
+    }
+
+    ghosts.forEach(g => {
+      const curSpeed = g.frightened ? 1.3 : (g.eaten ? 3.5 : g.speed);
+
+      if (Number.isInteger(g.x / TILE) && Number.isInteger(g.y / TILE)) {
+        const gx = Math.round(g.x / TILE);
+        const gy = Math.round(g.y / TILE);
+
+        if (g.eaten && gx === g.homeX && gy === g.homeY) {
+          g.eaten = false;
+          g.frightened = false;
+        }
+
+        const validDirs = [];
+        const opp = { x: -g.dir.x, y: -g.dir.y };
+
+        for (const k in DIRS) {
+          const d = DIRS[k];
+          if (d.x === opp.x && d.y === opp.y) continue;
+          const nx = gx + d.x, ny = gy + d.y;
+          if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && map[ny][nx] !== 1) {
+            validDirs.push(d);
+          }
+        }
+        if (validDirs.length === 0) validDirs.push(opp);
+
+        if (g.frightened) {
+          g.dir = validDirs[Math.floor(Math.random() * validDirs.length)];
+        } else if (g.eaten) {
+          g.dir = getBestDir(gx, gy, validDirs, g.homeX, g.homeY);
+        } else {
+          let tx = Math.round(player.x / TILE);
+          let ty = Math.round(player.y / TILE);
+          g.dir = getBestDir(gx, gy, validDirs, tx, ty);
+        }
+      }
+
+      // 次の位置が壁でなければ移動
+      const nextX = g.x + g.dir.x * curSpeed;
+      const nextY = g.y + g.dir.y * curSpeed;
+      if (canMoveGhost(nextX, nextY, g.dir)) {
+        g.x = nextX;
+        g.y = nextY;
+      } else {
+        // 壁にぶつかったら方向転換を強制
+        g.dir = { x: -g.dir.x, y: -g.dir.y };
+      }
+
+      const dist = Math.hypot((player.x + TILE/2) - (g.x + TILE/2), (player.y + TILE/2) - (g.y + TILE/2));
+      if (dist < TILE * 0.75) {
+        if (g.frightened) {
+          g.frightened = false;
+          g.eaten = true;
+          ghostCombo++;
+          const pts = 200 * Math.pow(2, ghostCombo - 1);
+          score += pts;
+          updateUI();
+          messageEl.textContent = `モンスター撃破！ +${pts} pts`;
+        } else if (!g.eaten) {
+          handlePlayerHit();
+        }
+      }
+    });
+  }
+
+  function canMoveGhost(x, y, dir) {
+    const gx = Math.floor((x + TILE / 2) / TILE);
+    const gy = Math.floor((y + TILE / 2) / TILE);
+    if (gx < 0 || gx >= COLS || gy < 0 || gy >= ROWS) return false;
+    return map[gy][gx] !== 1;
+  }
+
+  function getBestDir(gx, gy, dirs, targetX, targetY) {
+    let bestDir = dirs[0];
+    let minDist = Infinity;
+    dirs.forEach(d => {
+      const nx = gx + d.x, ny = gy + d.y;
+      const dist = Math.hypot(nx - targetX, ny - targetY);
+      if (dist < minDist) {
+        minDist = dist;
+        bestDir = d;
+      }
+    });
+    return bestDir;
+  }
+
+  function handlePlayerHit() {
+    lives--;
+    updateUI();
+    if (lives <= 0) {
+      running = false; gameOver = true;
+      messageEl.textContent = "ゲームオーバー！";
+      startBtn.textContent = "▶ もう一度";
+    } else {
+      resetPositions();
+      messageEl.textContent = `被弾！ 残り ${lives} 機！`;
+    }
+  }
+
+  function checkStageClear() {
+    if (eatenDots >= totalDots) {
+      running = false;
+      gameOver = true;
+      messageEl.textContent = "🎉 クリア！";
+      showTreasurePrize();
+    }
+  }
+
+  function getGamepadInput() {
+    if (!navigator.getGamepads) return null;
+    const pads = navigator.getGamepads();
+    let gp = Array.from(pads).find(p => p && p.connected) || null;
+    if (!gp) return null;
+    const ax = gp.axes[0] || 0;
+    const ay = gp.axes[1] || 0;
+    if (ax < -0.3) return DIRS.left;
+    if (ax > 0.3) return DIRS.right;
+    if (ay < -0.3) return DIRS.up;
+    if (ay > 0.3) return DIRS.down;
+    if (gp.buttons[14] && gp.buttons[14].pressed) return DIRS.left;
+    if (gp.buttons[15] && gp.buttons[15].pressed) return DIRS.right;
+    if (gp.buttons[12] && gp.buttons[12].pressed) return DIRS.up;
+    if (gp.buttons[13] && gp.buttons[13].pressed) return DIRS.down;
+    return null;
+  }
+
+  function update() {
+    if (!running) return;
+    frameCount++;
+
+    const gpDir = getGamepadInput();
+    if (gpDir) player.nextDir = gpDir;
+
+    updatePlayer();
+    updateGhosts();
+    checkStageClear();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const x = c * TILE;
+        const y = r * TILE;
+        if (map[r][c] === 1) {
+          ctx.fillStyle = "#1e3a60";
+          ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
+          ctx.strokeStyle = "#2f5685";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x + 2, y + 2, TILE - 4, TILE - 4);
+        } else if (map[r][c] === 2) {
+          ctx.fillStyle = "#38bdf8";
+          ctx.beginPath();
+          ctx.arc(x + TILE / 2, y + TILE / 2, 4, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (map[r][c] === 3) {
+          if (Math.floor(frameCount / 15) % 2 === 0) {
+            ctx.fillStyle = "#facc15";
+            ctx.beginPath();
+            ctx.arc(x + TILE / 2, y + TILE / 2, 7, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+    }
+
+    if (!gameOver || lives > 0) {
+      const px = player.x + TILE / 2;
+      const py = player.y + TILE / 2;
+      const startAngle = player.dir.angle + player.mouthAngle;
+      const endAngle = player.dir.angle + Math.PI * 2 - player.mouthAngle;
+
+      ctx.fillStyle = "#facc15";
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.arc(px, py, TILE / 2 - 2, startAngle, endAngle);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ghosts.forEach(g => {
+      const gx = g.x + TILE / 2;
+      const gy = g.y + TILE / 2;
+      const r = TILE / 2 - 2;
+
+      ctx.beginPath();
+      ctx.arc(gx, gy - 2, r, Math.PI, 0, false);
+      ctx.lineTo(gx + r, gy + r);
+      ctx.lineTo(gx + r * 0.5, gy + r - 4);
+      ctx.lineTo(gx, gy + r);
+      ctx.lineTo(gx - r * 0.5, gy + r - 4);
+      ctx.lineTo(gx - r, gy + r);
+      ctx.closePath();
+
+      if (g.eaten) {
+        ctx.fillStyle = "transparent";
+      } else if (g.frightened) {
+        const isFlashing = frightTimer < 100 && Math.floor(frameCount / 10) % 2 === 0;
+        ctx.fillStyle = isFlashing ? "#ffffff" : "#3b82f6";
+        ctx.fill();
+      } else {
+        ctx.fillStyle = g.color;
+        ctx.fill();
+      }
+
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(gx - 4, gy - 4, 4, 0, Math.PI * 2);
+      ctx.arc(gx + 4, gy - 4, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = g.frightened ? "#ef4444" : "#1e3a60";
+      const dx = g.dir.x * 1.5;
+      const dy = g.dir.y * 1.5;
+      ctx.beginPath();
+      ctx.arc(gx - 4 + dx, gy - 4 + dy, 2, 0, Math.PI * 2);
+      ctx.arc(gx + 4 + dx, gy - 4 + dy, 2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener("keydown", (e) => {
+    switch (e.key) {
+      case "ArrowUp": case "w": case "W": player.nextDir = DIRS.up; e.preventDefault(); break;
+      case "ArrowDown": case "s": case "S": player.nextDir = DIRS.down; e.preventDefault(); break;
+      case "ArrowLeft": case "a": case "A": player.nextDir = DIRS.left; e.preventDefault(); break;
+      case "ArrowRight": case "d": case "D": player.nextDir = DIRS.right; e.preventDefault(); break;
+    }
+  });
+
+  const bindDpad = (id, dir) => {
+    const el = document.getElementById(id);
+    el.addEventListener("pointerdown", () => { player.nextDir = dir; el.classList.add("pressed"); });
+    el.addEventListener("pointerup", () => el.classList.remove("pressed"));
+    el.addEventListener("pointercancel", () => el.classList.remove("pressed"));
+  };
+  bindDpad("btnUp", DIRS.up);
+  bindDpad("btnDown", DIRS.down);
+  bindDpad("btnLeft", DIRS.left);
+  bindDpad("btnRight", DIRS.right);
+
+  startBtn.addEventListener("click", () => {
+    if (running) pauseGame(); else startGame();
+  });
+  resetBtn.addEventListener("click", resetGame);
+
+  resetGame();
+  loop();
+})();
+
+
+// --- 宝箱オープン3D演出 (完全修復版) ---
+function showTreasurePrize() {
+  document.getElementById('prize-screen').style.display = 'block';
+  document.getElementById('main-game-wrap').style.visibility = 'hidden';
+  startPrizeScene();
+}
+
+function closeTreasurePrize() {
+  document.getElementById('prize-screen').style.display = 'none';
+  document.getElementById('main-game-wrap').style.visibility = '';
+}
+
+function startPrizeScene() {
+  const wrap = document.getElementById('prize-scene-wrap');
+  wrap.innerHTML = '';
+  const prizeCard = document.getElementById('prize-card');
+  prizeCard.classList.remove('visible');
+
+  let savedSubtitle = null, savedTitle = null, savedMessage = null;
+  try {
+    savedSubtitle = localStorage.getItem('treasure_subtitle');
+    savedTitle = localStorage.getItem('treasure_title');
+    savedMessage = localStorage.getItem('treasure_message');
+  } catch (_) {}
+
+  if (savedSubtitle) document.getElementById('display-subtitle').textContent = savedSubtitle;
+  if (savedTitle) document.getElementById('display-title').textContent = savedTitle;
+  if (savedMessage) document.getElementById('display-message').textContent = savedMessage;
+
+  try {
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x101713, 20, 50);
+
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+    camera.position.set(0, 0.8, 12);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    wrap.appendChild(renderer.domElement);
+
+    const ambient = new THREE.AmbientLight(0xfff5dc, 1.5);
+    scene.add(ambient);
+    const dirLight = new THREE.DirectionalLight(0xffea9f, 2.5);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
+
+    const treasureGroup = new THREE.Group();
+    scene.add(treasureGroup);
+
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x875027, roughness: 0.8 });
+    const lidMat = new THREE.MeshStandardMaterial({ color: 0xa9662e, roughness: 0.7 });
+    const goldMat = new THREE.MeshStandardMaterial({ color: 0xe5bd4e, metalness: 0.5, roughness: 0.3 });
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 1.5), woodMat);
+    body.position.y = -0.6;
+    treasureGroup.add(body);
+
+    const lidGroup = new THREE.Group();
+    lidGroup.position.set(0, 0, -0.75);
+    treasureGroup.add(lidGroup);
+
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.4, 1.6), lidMat);
+    lid.position.set(0, 0.2, 0.75);
+    lidGroup.add(lid);
+
+    const lock = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.1), goldMat);
+    lock.position.set(0, -0.1, 0.8);
+    lidGroup.add(lock);
+
+    const lightBeamGeo = new THREE.ConeGeometry(1.8, 4, 16, 1, true);
+    const lightBeamMat = new THREE.MeshBasicMaterial({ color: 0xffdf6d, transparent: true, opacity: 0.35, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+    const lightBeam = new THREE.Mesh(lightBeamGeo, lightBeamMat);
+    lightBeam.position.set(0, 2, 0);
+    treasureGroup.add(lightBeam);
+
+    const particleCount = 120;
+    const particleGeo = new THREE.BufferGeometry();
+    const particlePositions = new Float32Array(particleCount * 3);
+    const particleSpeeds = [];
+
+    for (let i = 0; i < particleCount; i++) {
+      particlePositions[i * 3] = (Math.random() - 0.5) * 3;
+      particlePositions[i * 3 + 1] = Math.random() * 2;
+      particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 3;
+      particleSpeeds.push({
+        x: (Math.random() - 0.5) * 0.02,
+        y: 0.02 + Math.random() * 0.04,
+        z: (Math.random() - 0.5) * 0.02
+      });
+    }
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    const particleMat = new THREE.PointsMaterial({ color: 0xffcc00, size: 0.12, transparent: true, opacity: 0.9 });
+    const particles = new THREE.Points(particleGeo, particleMat);
+    scene.add(particles);
+
+    function resize() {
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let clock = new THREE.Clock();
+    let animationStage = 0;
+
+    setTimeout(() => {
+      animationStage = 1;
+      setTimeout(() => {
+        prizeCard.classList.add('visible');
+      }, 600);
+    }, 400);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+      const elapsedTime = clock.getElapsedTime();
+
+      if (animationStage === 1) {
+        if (lidGroup.rotation.x > -Math.PI * 0.65) {
+          lidGroup.rotation.x -= dt * 3.5;
+        } else {
+          animationStage = 2;
+        }
+      }
+
+      treasureGroup.position.y = Math.sin(elapsedTime * 2) * 0.1;
+      treasureGroup.rotation.y = Math.sin(elapsedTime * 0.8) * 0.15;
+      lightBeam.material.opacity = 0.25 + Math.sin(elapsedTime * 5) * 0.15;
+
+      const posArr = particleGeo.attributes.position.array;
+      for (let i = 0; i < particleCount; i++) {
+        posArr[i * 3 + 1] += particleSpeeds[i].y;
+        posArr[i * 3] += particleSpeeds[i].x;
+        posArr[i * 3 + 2] += particleSpeeds[i].z;
+        if (posArr[i * 3 + 1] > 5) {
+          posArr[i * 3 + 1] = 0;
+          posArr[i * 3] = (Math.random() - 0.5) * 1.5;
+          posArr[i * 3 + 2] = (Math.random() - 0.5) * 1.5;
+        }
+      }
+      particleGeo.attributes.position.needsUpdate = true;
+
+      renderer.render(scene, camera);
+    }
+    animate();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+document.getElementById('replay-btn').addEventListener('click', startPrizeScene);
+document.getElementById('back-to-game').addEventListener('click', closeTreasurePrize);
+
+const modal = document.getElementById('settings-modal');
+document.getElementById('open-settings-btn').addEventListener('click', () => modal.style.display = 'flex');
+document.getElementById('cancel-settings').addEventListener('click', () => modal.style.display = 'none');
+document.getElementById('save-settings').addEventListener('click', () => {
+  const sub = document.getElementById('input-subtitle').value;
+  const tit = document.getElementById('input-title').value;
+  const msg = document.getElementById('input-message').value;
+  try {
+    localStorage.setItem('treasure_subtitle', sub);
+    localStorage.setItem('treasure_title', tit);
+    localStorage.setItem('treasure_message', msg);
+  } catch (_) {}
+  document.getElementById('display-subtitle').textContent = sub;
+  document.getElementById('display-title').textContent = tit;
+  document.getElementById('display-message').textContent = msg;
+  modal.style.display = 'none';
+  alert('賞品の内容を更新しました！');
+});
+</script>
+</body>
+</html>
