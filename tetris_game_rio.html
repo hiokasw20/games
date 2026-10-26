@@ -476,43 +476,44 @@
         <strong style="color:#eef5ff">キーボード / ゲームパッド</strong><br>
         ← →：左右移動 ↓：落下<br>
         ↑ / X / A：回転 Space / RT：一気に落下<br>
-        C / LB：HOLD Enter / Start：開始・一時停止
+        C / LB：HOLD Enter / Start：開始・一時停止<br>
+        ゲームパッドは接続後、ボタンを押すと認識します。
       </div>
       <div class="info">
-        <div class="preview-grid">
-          <div class="preview-box">
-            <div class="preview-title">HOLD</div>
-            <canvas id="holdCanvas" class="preview-canvas" width="90" height="90"></canvas>
-          </div>
-          <div class="preview-box">
-            <div class="preview-title">NEXT</div>
-            <canvas id="nextCanvas" class="preview-canvas" width="90" height="90"></canvas>
-          </div>
+      <div class="preview-grid">
+        <div class="preview-box">
+          <div class="preview-title">HOLD</div>
+          <canvas id="holdCanvas" class="preview-canvas" width="90" height="90"></canvas>
         </div>
-        <div class="stats-group">
-          <div class="stat-row">
-            <span class="label">SCORE</span>
-            <span class="value" id="score">0</span>
-          </div>
-          <div class="stat-row">
-            <span class="label">LINES</span>
-            <span class="value" id="lines">0</span>
-          </div>
-          <div class="stat-row">
-            <span class="label">LEVEL</span>
-            <span class="value" id="level">1</span>
-          </div>
+        <div class="preview-box">
+          <div class="preview-title">NEXT</div>
+          <canvas id="nextCanvas" class="preview-canvas" width="90" height="90"></canvas>
         </div>
+      </div>
+      <div class="stats-group">
+        <div class="stat-row">
+          <span class="label">SCORE</span>
+          <span class="value" id="score">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="label">LINES</span>
+          <span class="value" id="lines">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="label">LEVEL</span>
+          <span class="value" id="level">1</span>
+        </div>
+      </div>
 
-        <button class="btn" id="startBtn">▶ ゲームスタート</button>
-        <button class="btn secondary" id="resetBtn">↻ リセット</button>
-        <div class="msg" id="message">スタートボタンを押してください</div>
+      <button class="btn" id="startBtn">▶ ゲームスタート</button>
+      <button class="btn secondary" id="resetBtn">↻ リセット</button>
+      <div class="msg" id="message">スタートボタンを押してください</div>
       </div>
     </aside>
   </div>
 </div>
 
-<!-- 宝箱オープン演出画面 -->
+<!-- 宝箱オープン演出画面（threejs_walk_world_treasure_integrated.html にならう） -->
 <div id="prize-screen" aria-label="宝箱の賞品発表" style="display:none; position:fixed; inset:0; z-index:50;">
   <main id="prize-scene-wrap" style="position:absolute; inset:0; z-index:1; background:radial-gradient(circle at center, #233529 0%, #101713 100%);" aria-label="宝箱オープン3D演出"></main>
 
@@ -558,11 +559,7 @@
   </div>
 </div>
 
-<!-- Three.js Library -->
-<script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js';
-
-// --- テトリス風パズルゲームロジック ---
+<script>
 (() => {
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
@@ -580,8 +577,9 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.m
 
   const COLS = 10;
   const ROWS = 20;
-  const BLOCK_SIZE = 30;
+  const BLOCK_SIZE = 30; // 300 / 10
 
+  // Standard Tetrimino color palette with vibrant neon glow tones
   const PIECES = {
     I: { shape: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], color: "#00f0f0", glow: "#38bdf8" },
     J: { shape: [[1,0,0],[1,1,1],[0,0,0]], color: "#3b82f6", glow: "#60a5fa" },
@@ -610,7 +608,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.m
   let dropCounter = 0;
   let particles = [];
 
-  // 「RiO」の文字パターン
+  // 「RiO」の初期ブロックパターン
   const rioPattern = [
     [1,1,1, 0, 1, 0, 1,1,1],
     [1,0,1, 0, 0, 0, 1,0,1],
@@ -654,7 +652,9 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.m
       running = false;
       gameOver = true;
       messageEl.textContent = "🎉 クリア！ 宝箱発見！";
-      showTreasurePrize();
+      if (window.showTreasurePrize) {
+        window.showTreasurePrize();
+      }
     }
   }
 
@@ -707,6 +707,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.m
   function rotatePiece() {
     if (!currentPiece || !running) return;
     const rotated = rotateMatrix(currentPiece.shape);
+    
     const offsets = [0, -1, 1, -2, 2];
     for (const offset of offsets) {
       if (!collide(board, currentPiece, offset, 0, rotated)) {
@@ -1128,14 +1129,17 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.m
   resetGame();
   requestAnimationFrame(update);
 })();
+</script>
 
+<!-- Three.js Library & Treasure Scene -->
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js';
 
-// --- 宝箱オープン3D演出 ---
-function showTreasurePrize() {
+window.showTreasurePrize = function() {
   document.getElementById('prize-screen').style.display = 'block';
   document.getElementById('main-game-wrap').style.visibility = 'hidden';
   startPrizeScene();
-}
+};
 
 function closeTreasurePrize() {
   document.getElementById('prize-screen').style.display = 'none';
