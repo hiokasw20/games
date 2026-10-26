@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>テトリス風 落ち物パズル - RiO Special</title>
 <style>
   :root {
@@ -89,6 +89,7 @@
     height: auto;
     aspect-ratio: 1 / 2;
   }
+  .info { display: contents; }
   .side {
     padding: 20px;
     display: flex;
@@ -230,6 +231,216 @@
     .side { display: flex; flex-direction: column; gap: 12px; }
     .preview-grid { grid-template-columns: 1fr 1fr; }
   }
+
+  /* ===== スマホ縦向けレイアウト ===== */
+  @media (max-width: 600px) {
+    :root {
+      --ctrl-h: 118px;
+      --pv: 56px;
+      --vh100: 100vh;
+    }
+    @supports (height: 100dvh) {
+      :root { --vh100: 100dvh; }
+    }
+    :root {
+      --board-h: min(
+        calc(var(--vh100) - 64px - var(--ctrl-h)
+             - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)),
+        calc((100vw - 132px) * 2)
+      );
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+    }
+    body { display: block; }
+
+    .wrap {
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+      padding: calc(6px + env(safe-area-inset-top, 0px)) 7px
+               calc(6px + env(safe-area-inset-bottom, 0px));
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .top {
+      flex: 0 0 auto;
+      height: 28px;
+      margin-bottom: 6px;
+      justify-content: center;
+    }
+    h1 {
+      font-size: 17px;
+      line-height: 1.2;
+      gap: 6px;
+      letter-spacing: 0;
+    }
+    .subtitle { display: none; }
+
+    .layout {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) var(--ctrl-h);
+      gap: 8px;
+    }
+
+    .game-panel {
+      grid-column: 1;
+      grid-row: 1;
+      align-self: center;
+      padding: 4px;
+      border-radius: 10px;
+    }
+    .canvas-container {
+      height: var(--board-h);
+      width: calc(var(--board-h) / 2 + 2px);
+      border-width: 1px;
+      border-radius: 7px;
+    }
+    #game {
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      aspect-ratio: auto;
+    }
+
+    .side { display: contents; }
+    .help { display: none !important; }
+
+    .info {
+      grid-column: 2;
+      grid-row: 1;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 5px;
+      overflow: hidden;
+      background: rgba(17, 28, 46, 0.85);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+
+    .preview-grid {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+    .preview-box {
+      padding: 4px;
+      border-radius: 8px;
+    }
+    .preview-title {
+      margin: 0 0 2px;
+      font-size: 10px;
+    }
+    .preview-canvas {
+      width: var(--pv);
+      height: var(--pv);
+    }
+
+    .stats-group {
+      padding: 6px 8px;
+      border-radius: 8px;
+      gap: 4px;
+    }
+    .stat-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0;
+      border-bottom: 0;
+      padding: 0;
+    }
+    .label { font-size: 10px; line-height: 1.2; }
+    .value { font-size: 17px; line-height: 1.2; }
+
+    .info > .btn {
+      min-height: 38px;
+      padding: 8px 4px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.1;
+    }
+    .info > .btn.secondary {
+      min-height: 32px;
+      font-size: 12px;
+    }
+
+    .msg {
+      flex: 1 1 auto;
+      min-height: 30px;
+      padding: 4px;
+      border-radius: 8px;
+      font-size: 11px;
+      line-height: 1.3;
+      overflow: hidden;
+    }
+
+    .touch-controls {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      margin: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: 1fr 1fr;
+      grid-template-areas:
+        "hold rot  hard"
+        "left soft right";
+      gap: 6px;
+    }
+    .touch-row { display: contents; }
+
+    .tbtn {
+      min-height: 0;
+      height: 100%;
+      padding: 0 2px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.1;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #tHold      { grid-area: hold; }
+    #tRotate    { grid-area: rot; }
+    #tHardDrop  { grid-area: hard; }
+    #tLeft      { grid-area: left; }
+    #tSoftDrop  { grid-area: soft; }
+    #tRight     { grid-area: right; }
+
+    #tLeft, #tSoftDrop, #tRight { font-size: 24px; }
+    #tLeft .txt, #tSoftDrop .txt, #tRight .txt { display: none; }
+  }
+
+  @media (max-width: 600px) and (max-height: 700px) {
+    :root {
+      --ctrl-h: 96px;
+      --pv: 40px;
+    }
+    .info { gap: 4px; padding: 4px; }
+    .preview-grid { gap: 4px; }
+    .preview-box { padding: 3px; }
+    .stats-group { padding: 4px 8px; gap: 2px; }
+    .value { font-size: 15px; }
+    .info > .btn { min-height: 32px; padding: 5px 4px; font-size: 12px; }
+    .info > .btn.secondary { min-height: 28px; }
+    .msg { min-height: 26px; padding: 3px; font-size: 10px; }
+    .tbtn { font-size: 13px; }
+    #tLeft, #tSoftDrop, #tRight { font-size: 22px; }
+  }
+
+  @media (max-width: 360px) {
+    .tbtn { font-size: 12px; }
+  }
 </style>
 </head>
 <body>
@@ -246,56 +457,62 @@
       </div>
     </div>
 
-<aside class="side">
-      <div class="preview-grid">
-        <div class="preview-box">
-          <div class="preview-title">HOLD</div>
-          <canvas id="holdCanvas" class="preview-canvas" width="90" height="90"></canvas>
-        </div>
-        <div class="preview-box">
-          <div class="preview-title">NEXT</div>
-          <canvas id="nextCanvas" class="preview-canvas" width="90" height="90"></canvas>
-        </div>
-      </div>
-
-      <div class="stats-group">
-        <div class="stat-row">
-          <span class="label">SCORE</span>
-          <span class="value" id="score">0</span>
-        </div>
-        <div class="stat-row">
-          <span class="label">LINES</span>
-          <span class="value" id="lines">0</span>
-        </div>
-        <div class="stat-row">
-          <span class="label">LEVEL</span>
-          <span class="value" id="level">1</span>
-        </div>
-      </div>
-
-      <button class="btn" id="startBtn">▶ ゲームスタート</button>
-      <button class="btn secondary" id="resetBtn">↻ リセット</button>
-      <div class="msg" id="message">スタートボタンを押してください</div>
-
+    <aside class="side">
       <div class="touch-controls">
         <div class="touch-row">
           <button class="tbtn" id="tHold">HOLD</button>
           <button class="tbtn accent" id="tRotate">↻ 回転</button>
         </div>
         <div class="touch-row">
-          <button class="tbtn" id="tLeft">◄ Left</button>
-          <button class="tbtn" id="tRight">Right ►</button>
+          <button class="tbtn" id="tLeft" aria-label="左へ"><span class="ico">◄</span><span class="txt">&nbsp;Left</span></button>
+          <button class="tbtn" id="tRight" aria-label="右へ"><span class="txt">Right&nbsp;</span><span class="ico">►</span></button>
         </div>
         <div class="touch-row">
-          <button class="tbtn" id="tSoftDrop">▼ Soft</button>
+          <button class="tbtn" id="tSoftDrop" aria-label="下へ"><span class="ico">▼</span><span class="txt">&nbsp;Soft</span></button>
           <button class="tbtn wide accent" id="tHardDrop">⚡ HARD DROP</button>
         </div>
+      </div>
+      <div class="help" style="font-size:12px;line-height:1.55;color:#94a3b8">
+        <strong style="color:#eef5ff">キーボード / ゲームパッド</strong><br>
+        ← →：左右移動 ↓：落下<br>
+        ↑ / X / A：回転 Space / RT：一気に落下<br>
+        C / LB：HOLD Enter / Start：開始・一時停止
+      </div>
+      <div class="info">
+        <div class="preview-grid">
+          <div class="preview-box">
+            <div class="preview-title">HOLD</div>
+            <canvas id="holdCanvas" class="preview-canvas" width="90" height="90"></canvas>
+          </div>
+          <div class="preview-box">
+            <div class="preview-title">NEXT</div>
+            <canvas id="nextCanvas" class="preview-canvas" width="90" height="90"></canvas>
+          </div>
+        </div>
+        <div class="stats-group">
+          <div class="stat-row">
+            <span class="label">SCORE</span>
+            <span class="value" id="score">0</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">LINES</span>
+            <span class="value" id="lines">0</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">LEVEL</span>
+            <span class="value" id="level">1</span>
+          </div>
+        </div>
+
+        <button class="btn" id="startBtn">▶ ゲームスタート</button>
+        <button class="btn secondary" id="resetBtn">↻ リセット</button>
+        <div class="msg" id="message">スタートボタンを押してください</div>
       </div>
     </aside>
   </div>
 </div>
 
-<!-- 宝箱オープン演出画面（threejs_walk_world_treasure_integrated.html にならう） -->
+<!-- 宝箱オープン演出画面 -->
 <div id="prize-screen" aria-label="宝箱の賞品発表" style="display:none; position:fixed; inset:0; z-index:50;">
   <main id="prize-scene-wrap" style="position:absolute; inset:0; z-index:1; background:radial-gradient(circle at center, #233529 0%, #101713 100%);" aria-label="宝箱オープン3D演出"></main>
 
@@ -763,6 +980,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.m
     const deltaTime = time - lastTime;
     lastTime = time;
 
+    pollGamepad();
     if (running) {
       dropCounter += deltaTime;
       const dropInterval = Math.max(80, 800 - (level - 1) * 70);
@@ -818,9 +1036,70 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.m
     levelEl.textContent = level;
   }
 
+  // ゲームパッド対応
+  const gpState = { rotate:false, hardDrop:false, hold:false, start:false };
+  let gpConnected = false;
+  let gpRepeat = { left:0, right:0 };
+  let gpSoftDrop = false;
+
+  function pollGamepad() {
+    if (!navigator.getGamepads) return;
+    const pads = navigator.getGamepads();
+    let found = false;
+    for (const gp of pads) {
+      if (!gp) continue;
+      found = true;
+      const ax = gp.axes?.[0] || 0, ay = gp.axes?.[1] || 0;
+      const pressed = i => !!gp.buttons?.[i] &&
+        (gp.buttons[i].pressed || gp.buttons[i].value > 0.65);
+      const left = ax < -0.55 || pressed(14);
+      const right = ax > 0.55 || pressed(15);
+      const down = ay > 0.55 || pressed(13);
+      const rotate = pressed(0) || pressed(3) || pressed(12);
+      const hardDropPressed = pressed(7);
+      const hold = pressed(4);
+      const start = pressed(9);
+      const now = performance.now();
+
+      if (left && now - gpRepeat.left > 115) { moveLeft(); gpRepeat.left = now; }
+      if (right && now - gpRepeat.right > 115) { moveRight(); gpRepeat.right = now; }
+      if (down && !gpSoftDrop) moveDown();
+      gpSoftDrop = down;
+
+      if (rotate && !gpState.rotate) rotatePiece();
+      if (hardDropPressed && !gpState.hardDrop) hardDrop();
+      if (hold && !gpState.hold) performHold();
+      if (start && !gpState.start) { if (running) pauseGame(); else startGame(); }
+      Object.assign(gpState, { rotate, hardDrop: hardDropPressed, hold, start });
+    }
+    if (found && !gpConnected) {
+      gpConnected = true;
+      if (!running && !gameOver) messageEl.textContent = "ゲームパッド接続中。Startで開始できます";
+    }
+    if (!found) {
+      gpConnected = false;
+      Object.assign(gpState, { rotate:false, hardDrop:false, hold:false, start:false });
+      gpSoftDrop = false;
+    }
+  }
+
+  window.addEventListener("gamepadconnected", () => {
+    gpConnected = true;
+    messageEl.textContent = "ゲームパッドを認識しました。Startで開始できます";
+  });
+  window.addEventListener("gamepaddisconnected", () => {
+    gpConnected = false;
+    messageEl.textContent = "ゲームパッドが切断されました";
+  });
+
   window.addEventListener("keydown", (e) => {
     if (!running && e.code === "Space") {
       startGame();
+      return;
+    }
+    if (e.code === "Enter" || e.code === "Escape" || e.code === "KeyP") {
+      if (running) pauseGame(); else startGame();
+      e.preventDefault();
       return;
     }
     switch (e.code) {
@@ -833,7 +1112,6 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.m
     }
   });
 
-  // オリジナル通りのボタンIDバインド
   document.getElementById("tLeft").addEventListener("click", moveLeft);
   document.getElementById("tRight").addEventListener("click", moveRight);
   document.getElementById("tSoftDrop").addEventListener("click", moveDown);
