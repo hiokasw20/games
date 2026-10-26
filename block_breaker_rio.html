@@ -200,7 +200,12 @@
     background: var(--accent);
     color: #000;
   }
-
+/* 宝箱カードの表示アニメーション用クラス */
+  .prize-card.visible {
+    opacity: 1 !important;
+    transform: translateY(0) scale(1) !important;
+  }
+  
   @media (max-width: 850px) {
     .layout { grid-template-columns: 1fr; }
     .side { display: flex; flex-direction: column; gap: 12px; }
